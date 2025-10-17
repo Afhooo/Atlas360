@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Lock, Eye, EyeOff, Shield, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 
 /* ─────────────────────────── SPINNER ─────────────────────────── */
 export const Spinner = () => (
@@ -177,6 +177,9 @@ export function LoginClient() {
     message: string;
   } | null>(null);
 
+  const cardClassName =
+    "glass-card relative overflow-hidden border border-white/15 bg-white/10 backdrop-blur-[28px] shadow-[0_32px_88px_rgba(8,15,30,0.55)] before:pointer-events-none before:absolute before:-z-10 before:inset-0 before:bg-[linear-gradient(140deg,rgba(59,130,246,0.18)_0%,rgba(52,211,153,0.12)_45%,transparent_85%)] before:opacity-70 before:content-['']";
+
   const showNotification = (type: 'success' | 'error' | 'info', message: string) => {
     setNotification({ type, message });
   };
@@ -310,24 +313,24 @@ export function LoginClient() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="w-full max-w-md"
+          className="relative w-full max-w-md"
         >
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-10 -inset-y-12 -z-10 rounded-[40px] bg-[radial-gradient(140%_140%_at_50%_-20%,rgba(59,130,246,0.28),transparent_60%)]"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-6 -bottom-20 -z-10 h-48 rounded-[40px] bg-[radial-gradient(120%_100%_at_50%_100%,rgba(15,118,110,0.28),transparent_70%)] blur-2xl"
+          />
+
           {/* Logo and Title */}
           <div className="text-center mb-8">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-              className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 rounded-apple-xl border border-white/20 flex items-center justify-center"
-            >
-              <Shield size={32} className="text-apple-blue-400" />
-            </motion.div>
-            
             <motion.h1
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3, duration: 0.5 }}
-              className="apple-h1 text-white mb-2"
+              className="apple-h1 mb-4 bg-gradient-to-r from-white via-white to-white/70 bg-clip-text text-transparent"
             >
               Fenix Store
             </motion.h1>
@@ -336,9 +339,18 @@ export function LoginClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4, duration: 0.5 }}
-              className="apple-body text-apple-gray-300"
+              className="apple-body text-white/80"
             >
               Sistema de gestión integral
+            </motion.p>
+            
+            <motion.p
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              className="mt-2 text-sm text-white/60"
+            >
+              Acceso corporativo seguro para el equipo Fenix
             </motion.p>
           </div>
 
@@ -350,13 +362,13 @@ export function LoginClient() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
-                className="glass-card"
+                className={cardClassName}
               >
                 <form onSubmit={handleLogin} className="space-y-6">
                   <div className="space-y-4">
                     {/* Username Field */}
                     <div className="space-y-2">
-                      <label className="block apple-caption text-apple-gray-300">
+                      <label className="block apple-caption text-white/75">
                         Usuario
                       </label>
                       <div className="relative">
@@ -375,7 +387,7 @@ export function LoginClient() {
 
                     {/* Password Field */}
                     <div className="space-y-2">
-                      <label className="block apple-caption text-apple-gray-300">
+                      <label className="block apple-caption text-white/75">
                         Contraseña
                       </label>
                       <div className="relative">
@@ -420,7 +432,7 @@ export function LoginClient() {
                     <button
                       type="button"
                       onClick={() => setShowChangePassword(true)}
-                      className="btn-ghost w-full"
+                      className="w-full text-sm font-medium text-white/70 underline-offset-[6px] transition-colors duration-200 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                       disabled={loading}
                     >
                       Cambiar Contraseña
@@ -435,11 +447,11 @@ export function LoginClient() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="glass-card"
+                className={cardClassName}
               >
                 <div className="mb-6">
                   <h2 className="apple-h3 text-white mb-2">Cambiar Contraseña</h2>
-                  <p className="apple-caption text-apple-gray-400">
+                  <p className="apple-caption text-white/60">
                     La contraseña debe tener al menos 8 caracteres, incluyendo letras y números.
                   </p>
                 </div>
@@ -448,7 +460,7 @@ export function LoginClient() {
                   <div className="space-y-4">
                     {/* Current Password */}
                     <div className="space-y-2">
-                      <label className="block apple-caption text-apple-gray-300">
+                      <label className="block apple-caption text-white/75">
                         Contraseña Actual
                       </label>
                       <input
@@ -463,7 +475,7 @@ export function LoginClient() {
 
                     {/* New Password */}
                     <div className="space-y-2">
-                      <label className="block apple-caption text-apple-gray-300">
+                      <label className="block apple-caption text-white/75">
                         Nueva Contraseña
                       </label>
                       <input
@@ -478,7 +490,7 @@ export function LoginClient() {
 
                     {/* Confirm Password */}
                     <div className="space-y-2">
-                      <label className="block apple-caption text-apple-gray-300">
+                      <label className="block apple-caption text-white/75">
                         Confirmar Contraseña
                       </label>
                       <input
@@ -497,7 +509,7 @@ export function LoginClient() {
                     <button
                       type="button"
                       onClick={() => setShowChangePassword(false)}
-                      className="btn-ghost flex-1"
+                      className="btn-secondary flex-1"
                       disabled={changingPassword}
                     >
                       Cancelar

@@ -1,25 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import {
   CalendarDays, ShieldCheck, UploadCloud, User2, Clock3, Image as ImageIcon,
 } from 'lucide-react';
 
 const fetcher = (u: string) => fetch(u, { cache: 'no-store' }).then(r => r.json());
 
-type Role = 'admin'|'promotor'|'coordinador'|'lider'|'asesor'|'unknown';
-const norm = (r?: string): Role => {
-  const x = (r || '').toUpperCase();
-  if (['GERENCIA','ADMIN','ADMINISTRADOR'].includes(x)) return 'admin';
-  if (['PROMOTOR','PROMOTORA'].includes(x)) return 'promotor';
-  if (['COORDINADOR','COORDINADORA','COORDINACION'].includes(x)) return 'coordinador';
-  if (['LIDER','JEFE','SUPERVISOR'].includes(x)) return 'lider';
-  if (['ASESOR','VENDEDOR','VENDEDORA'].includes(x)) return 'asesor';
-  return 'unknown';
-};
 
 type PermissionKind =
   | 'Enfermedad'
@@ -34,7 +23,6 @@ type PermissionKind =
 export default function SolicitarPermisoPage() {
   const router = useRouter();
   const { data: me } = useSWR('/endpoints/me', fetcher);
-  const role: Role = useMemo(() => norm(me?.role), [me?.role]);
 
   // Form state
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10)); // YYYY-MM-DD

@@ -28,17 +28,6 @@ type Props = {
   }) => Promise<void>;
 };
 
-const statusLabel = (s: string) =>
-  s.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-
-// util: datetime -> value para <input type="datetime-local">
-const toLocalInputValue = (dt: Date) => {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(
-    dt.getHours()
-  )}:${pad(dt.getMinutes())}`;
-};
-
 export default function DeliveryDetailsModal({
   delivery,
   routes,

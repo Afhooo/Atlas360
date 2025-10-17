@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, Search, Filter, Clock, Users, 
@@ -10,6 +10,7 @@ import {
   Expand, Minimize, FileText, Eye, EyeOff
 } from 'lucide-react';
 import { normalizeRole, type Role } from '@/lib/auth/roles';
+import SelfieClip from '@/components/attendance/SelfieClip';
 
 /* ============================================================================
    TIPOS
@@ -36,6 +37,7 @@ type Row = {
 type Site = { id: string; name: string };
 type AttendanceMark = {
   id: string;
+  person_id?: string | null;
   created_at: string;
   type?: string | null;
   lat?: number | null;
@@ -52,8 +54,6 @@ type PersonLite = { id: string; full_name?: string | null; role?: string | null;
 /* ============================================================================
    CONFIG / HELPERS
    ============================================================================ */
-   const ALLOWED_ROLES = new Set<Role>(['asesor']);
-
 const resolveRole = (raw?: string | null): Role => {
   const normalized = normalizeRole(raw);
   if (normalized !== 'unknown') return normalized;
@@ -61,13 +61,16 @@ const resolveRole = (raw?: string | null): Role => {
   const upper = String(raw ?? '').trim().toUpperCase();
   if (upper.includes('ASESOR')) return 'asesor';
   if (upper.includes('VENDEDOR')) return 'asesor';
+  if (upper.includes('CAJA')) return 'asesor';
   if (upper.includes('PROMOTOR')) return 'promotor';
   if (upper.includes('COORDIN')) return 'coordinador';
-  if (upper.includes('LOGIST')) return 'logistica';
+  if (upper.includes('LOGIST') || upper.includes('RUTA')) return 'logistica';
   if (upper.includes('LIDER') || upper.includes('SUPERVISOR')) return 'lider';
   if (upper.includes('GEREN') || upper.includes('ADMIN')) return 'admin';
   return 'unknown';
 };
+
+const isRoleHidden = (role?: Role) => role === 'promotor';
 
 const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -239,7 +242,7 @@ export default function AsistenciaResumenPage() {
       try {
         const r = await fetch('/endpoints/sites', { cache: 'no-store' });
         const j = await r.json();
-        if (r.ok) setSites(j.data || []);
+        if (r.ok) setSites((j.results as Site[]) || j.data || []);
       } catch {}
     })();
   }, []);
@@ -302,6 +305,39 @@ export default function AsistenciaResumenPage() {
       }
       setPeople(ppl);
 
+      const derivedSiteMap = new Map<string, Site>();
+      const attendanceRows = Array.isArray(j2.data) ? (j2.data as any[]) : [];
+      for (const m of attendanceRows) {
+        const sid = (m?.site?.id ?? m?.site_id ?? null);
+        const sname = (m?.site?.name ?? m?.site_name ?? null);
+        if (sid && sname) {
+          derivedSiteMap.set(String(sid), { id: String(sid), name: sname });
+        }
+      }
+      for (const r of dayRows) {
+        if (r.site_name) {
+          const sid = `name:${r.site_name}`;
+          if (!derivedSiteMap.has(sid)) {
+            derivedSiteMap.set(sid, { id: sid, name: r.site_name });
+          }
+        }
+      }
+      setSites((prev) => {
+        const map = new Map(prev.map((s) => [s.id, s]));
+        const existingNames = new Set(Array.from(map.values())
+          .map((s) => (s.name || '').trim().toLowerCase())
+          .filter(Boolean));
+        for (const site of derivedSiteMap.values()) {
+          if (!site?.id || !site?.name) continue;
+          const normalizedName = site.name.trim().toLowerCase();
+          if (map.has(site.id)) continue;
+          if (normalizedName && existingNames.has(normalizedName)) continue;
+          map.set(site.id, site);
+          if (normalizedName) existingNames.add(normalizedName);
+        }
+        return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+      });
+
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'error');
     } finally {
@@ -357,11 +393,59 @@ export default function AsistenciaResumenPage() {
     return map;
   }, [marks, people]);
 
+  const marksByPersonType = useMemo(() => {
+    const map = new Map<string, AttendanceMark[]>();
+    for (const mark of marks) {
+      const pid = mark.person_id ?? mark.person?.id ?? null;
+      const type = (mark.type ?? '').toLowerCase();
+      if (!pid || !type || !mark.created_at) continue;
+      const key = `${pid}|${type}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(mark);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    }
+    return map;
+  }, [marks]);
+
+  const findMarkFor = useCallback((personId: string | null | undefined, timestamp: string | null | undefined, type: 'in' | 'out' | 'lunch_in' | 'lunch_out') => {
+    if (!personId || !timestamp) return null;
+    const key = `${personId}|${type}`;
+    const candidates = marksByPersonType.get(key);
+    if (!candidates?.length) return null;
+    const target = new Date(timestamp).getTime();
+    if (Number.isNaN(target)) return null;
+    let best: AttendanceMark | null = null;
+    let bestDiff = Number.POSITIVE_INFINITY;
+    for (const mark of candidates) {
+      const markTime = new Date(mark.created_at).getTime();
+      if (Number.isNaN(markTime)) continue;
+      const diff = Math.abs(markTime - target);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = mark;
+      }
+    }
+    return bestDiff <= 2 * 60 * 1000 ? best : null;
+  }, [marksByPersonType]);
+
+  const renderMarkCell = useCallback((personId: string | null | undefined, timestamp: string | null | undefined, type: 'in' | 'out' | 'lunch_in' | 'lunch_out', highlight = false) => {
+    const mark = findMarkFor(personId, timestamp, type);
+    const textClass = highlight ? 'apple-caption text-white' : 'apple-caption text-apple-gray-300';
+    return (
+      <div className="flex items-center justify-center gap-2">
+        <span className={textClass}>{fmtTime(timestamp ?? null)}</span>
+        {mark?.selfie_path ? <SelfieClip attendanceId={mark.id} variant="icon" /> : null}
+      </div>
+    );
+  }, [findMarkFor]);
+
   const uniqueTodayRows = useMemo(() => {
     const uniqueMap = new Map<string, Row>();
     for (const row of todayRows) {
       const role = personToRole.get(row.person_id);
-      if (role && !ALLOWED_ROLES.has(role)) continue;
+      if (isRoleHidden(role)) continue;
       if (!uniqueMap.has(row.person_id)) uniqueMap.set(row.person_id, row);
     }
     return Array.from(uniqueMap.values())
@@ -405,7 +489,7 @@ export default function AsistenciaResumenPage() {
       if (!filterQ(r)) continue;
 
       const role = personToRole.get(r.person_id);
-      if (role && !ALLOWED_ROLES.has(role)) continue;
+      if (isRoleHidden(role)) continue;
 
       const siteName = personToSiteName.get(r.person_id) || normalizeSiteName(r.site_name) || 'Sin sucursal';
       if (!bySite.has(siteName)) {
@@ -654,7 +738,10 @@ export default function AsistenciaResumenPage() {
               </tr>
             </thead>
             <tbody>
-              {uniqueTodayRows.map((r, i) => (
+              {uniqueTodayRows.map((r, i) => {
+                const inMark = findMarkFor(r.person_id, r.first_in, 'in');
+                const outMark = findMarkFor(r.person_id, r.last_out, 'out');
+                return (
                 <motion.tr
                   key={`today-${r.person_id}-${i}`}
                   initial={{ opacity: 0, x: -20 }}
@@ -681,12 +768,14 @@ export default function AsistenciaResumenPage() {
                     <div className="flex items-center gap-2">
                       <LogIn size={14} className="text-apple-green-400" />
                       <span className="apple-body text-white">{fmtTime(r.first_in)}</span>
+                      {inMark?.selfie_path ? <SelfieClip attendanceId={inMark.id} variant="icon" /> : null}
                     </div>
                   </td>
                   <td>
                     <div className="flex items-center gap-2">
                       <LogOut size={14} className="text-apple-red-400" />
                       <span className="apple-body text-white">{fmtTime(r.last_out)}</span>
+                      {outMark?.selfie_path ? <SelfieClip attendanceId={outMark.id} variant="icon" /> : null}
                     </div>
                   </td>
                   <td>
@@ -718,7 +807,8 @@ export default function AsistenciaResumenPage() {
                     </div>
                   </td>
                 </motion.tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -1100,10 +1190,10 @@ export default function AsistenciaResumenPage() {
                                                     </span>
                                                   </div>
                                                 </td>
-                                                <td className="apple-caption text-white">{fmtTime(r.first_in)}</td>
-                                                <td className="apple-caption text-apple-gray-300">{fmtTime(r.lunch_in ?? null)}</td>
-                                                <td className="apple-caption text-apple-gray-300">{fmtTime(r.lunch_out ?? null)}</td>
-                                                <td className="apple-caption text-white">{fmtTime(r.last_out)}</td>
+                                                <td>{renderMarkCell(p.person_id, r.first_in, 'in', true)}</td>
+                                                <td>{renderMarkCell(p.person_id, r.lunch_in ?? null, 'lunch_in')}</td>
+                                                <td>{renderMarkCell(p.person_id, r.lunch_out ?? null, 'lunch_out')}</td>
+                                                <td>{renderMarkCell(p.person_id, r.last_out, 'out', true)}</td>
                                                 <td className="apple-caption text-apple-gray-300">{mmOrDash(r.lunch_minutes)}</td>
                                                 <td className="apple-caption text-white font-medium">{mmOrDash(r.worked_minutes)}</td>
                                                 <td className="apple-caption text-apple-gray-300">{mmOrDash(r.expected_minutes)}</td>

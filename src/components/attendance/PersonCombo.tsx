@@ -43,7 +43,7 @@ export default function PersonCombo({ value, onSelect }: Props) {
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || 'fetch_failed');
         setList(json.data as Person[]);
-      } catch (e) {
+      } catch {
         setList([]);
       } finally {
         setLoading(false);
@@ -64,7 +64,7 @@ export default function PersonCombo({ value, onSelect }: Props) {
         if (!res.ok) throw new Error(json?.error || 'fetch_failed');
         setList(json.data as Person[]);
         setIdx(0);
-      } catch (e) {
+      } catch {
         // noop
       } finally {
         setLoading(false);
@@ -89,13 +89,16 @@ export default function PersonCombo({ value, onSelect }: Props) {
     if (!open) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, filtered.length - 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx((i) => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); filtered[idx] && choose(filtered[idx]); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filtered[idx]) choose(filtered[idx]);
+    }
     else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); }
   };
 
   useEffect(() => {
     if (value) setQ(value.full_name);
-  }, [value?.id]);
+  }, [value]);
 
   return (
     <div ref={boxRef} style={{ display: 'grid', gap: 6, position: 'relative' }}>

@@ -90,12 +90,12 @@ const normType = (t?: string | null) => {
 // Roles visibles en la vista (asesor/venedor + coordinador/líder/supervisor)
 const isAllowedRole = (raw?: string | null): boolean => {
   const normalized = normalizeRole(raw);
-  if (normalized === 'asesor' || normalized === 'coordinador' || normalized === 'lider') return true;
+  if (normalized === 'promotor') return false;
+  if (normalized !== 'unknown') return true;
   const up = String(raw ?? '').toUpperCase();
-  return (
-    up.includes('ASESOR') || up.includes('VENDEDOR') ||
-    up.includes('COORDINAD') || up.includes('LIDER') || up.includes('SUPERVISOR')
-  );
+  if (!up) return true;
+  if (up.includes('PROMOTOR')) return false;
+  return true;
 };
 
 export async function GET(req: Request) {
@@ -137,8 +137,7 @@ export async function GET(req: Request) {
     const pplRes = await withSupabaseRetry(async () => {
       let query = supabase
         .from('people')
-        .select('id, full_name, local, site_id, role, fenix_role, active')
-        .eq('active', true);
+        .select('id, full_name, local, site_id, role, fenix_role, active');
       if (site) query = query.eq('site_id', site);
       if (q) query = query.ilike('full_name', `%${q}%`);
       return await query;

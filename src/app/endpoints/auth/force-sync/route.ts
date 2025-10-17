@@ -9,7 +9,6 @@ const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 // === Config desde .env ===
 const DEFAULT_DOMAIN = process.env.LOGIN_DOMAIN || 'fenix.local';
 const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'FENIX2025!';
-const FORCE_DOMAIN = true; // siempre forzar @fenix.local
 
 // --- helpers ---
 const toAscii = (s: string) =>

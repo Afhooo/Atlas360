@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 
 type Wx = {
@@ -47,10 +48,13 @@ export default function WeatherStrip(
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="text-3xl font-extrabold">{c.tempC}°C</div>
-                  <img
+                  <Image
                     src={`https://openweathermap.org/img/wn/${c.icon}@2x.png`}
                     alt={c.condition}
+                    width={40}
+                    height={40}
                     className="w-10 h-10 -mb-2 opacity-90"
+                    unoptimized
                   />
                 </div>
                 <div className="text-sm text-white/70 mt-1 capitalize">{c.condition}</div>

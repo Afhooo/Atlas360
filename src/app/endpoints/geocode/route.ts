@@ -5,6 +5,34 @@ const KEY = process.env.OPENCAGE_API_KEY || process.env.NEXT_PUBLIC_OPENCAGE_API
 const NOMINATIM_UA =
   process.env.NOMINATIM_USER_AGENT || 'fenix-store/1.0 (contacto: soporte@fenix.local)';
 
+type SafeFetchOptions = RequestInit & { timeoutMs?: number };
+
+async function safeFetch(
+  input: string | URL,
+  options: SafeFetchOptions = {}
+): Promise<Response | null> {
+  const { timeoutMs = 10000, signal, ...rest } = options;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
+
+  try {
+    return await fetch(input, { ...rest, signal: controller.signal });
+  } catch (err) {
+    const target = typeof input === 'string' ? input : input.toString();
+    console.warn('[geocode] fetch failed for', target, err);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 type GeoComponents = {
   street?: string;
   neighbourhood?: string;
@@ -40,6 +68,7 @@ const normalizeComponents = (
   };
 
   const street = pick(['road', 'street', 'pedestrian', 'path', 'residential', 'highway']);
+  const houseNumber = pick(['house_number', 'house_no', 'number']);
   const neighbourhood = pick(['neighbourhood', 'neighborhood', 'barrio']);
   const suburb = pick(['suburb', 'quarter']);
   const district = pick(['district', 'city_district']);
@@ -50,7 +79,7 @@ const normalizeComponents = (
   const country = pick(['country']);
 
   return {
-    ...(street ? { street } : {}),
+    ...(street || houseNumber ? { street: [street, houseNumber].filter(Boolean).join(' ').trim() } : {}),
     ...(neighbourhood ? { neighbourhood } : {}),
     ...(suburb ? { suburb } : {}),
     ...(district ? { district } : {}),
@@ -80,26 +109,60 @@ function parseLatLngLiteral(input: string): { lat: number; lng: number } | null 
   return null;
 }
 
-function parseGoogleMapsUrl(u: string): { lat: number; lng: number } | null {
+type GoogleUrlParseResult = { lat: number; lng: number; text?: string | null };
+
+function parseGoogleMapsUrl(u: string): GoogleUrlParseResult | null {
   try {
     const url = new URL(u);
     if (!/google\.[^/]*\/maps/.test(url.href)) return null;
 
+    let text: string | undefined;
+    const segments = url.pathname.split('/').filter(Boolean);
+    const placeIdx = segments.indexOf('place');
+    if (placeIdx !== -1) {
+      const candidate = segments.slice(placeIdx + 1).find(seg => seg && !seg.startsWith('@') && !seg.startsWith('data='));
+      if (candidate) {
+        text = decodeURIComponent(candidate).replace(/\+/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+    }
+    if (!text) {
+      const qp = url.searchParams.get('query') || url.searchParams.get('destination') || url.searchParams.get('q');
+      if (qp) text = qp.replace(/\+/g, ' ').trim();
+    }
+
     // patrón @lat,lng,zoom
     const at = url.pathname.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-    if (at) return { lat: Number(at[1]), lng: Number(at[2]) };
+    if (at) return { lat: Number(at[1]), lng: Number(at[2]), text };
 
     // query=lat,lng
     const q = url.searchParams.get('query') || url.searchParams.get('q');
     const ll = q && parseLatLngLiteral(q);
-    if (ll) return ll;
+    if (ll) return { ...ll, text };
 
     // !3dLAT!4dLNG
     const m = url.href.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
-    if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+    if (m) return { lat: Number(m[1]), lng: Number(m[2]), text };
 
     return null;
   } catch {
+    return null;
+  }
+}
+
+async function expandGoogleMapsUrl(u: string): Promise<string | null> {
+  try {
+    const res = await safeFetch(u, {
+      method: 'GET',
+      redirect: 'follow',
+      cache: 'no-store',
+      timeoutMs: 7000,
+    });
+    if (!res) return null;
+    if (res.url && res.url !== u) return res.url;
+    const hinted = res.headers.get('location');
+    return hinted || null;
+  } catch (err) {
+    console.warn('[geocode] expandGoogleMapsUrl failed', err);
     return null;
   }
 }
@@ -114,8 +177,14 @@ async function opencageForward(q: string): Promise<GeoOut | null> {
   url.searchParams.set('limit', '1');
   url.searchParams.set('no_annotations', '1');
 
-  const res = await fetch(url.toString(), { cache: 'no-store' });
-  const data = await res.json();
+  const res = await safeFetch(url.toString(), { cache: 'no-store' });
+  if (!res) return null;
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    return null;
+  }
   if (!res.ok || !data?.results?.[0]) return null;
   const r = data.results[0];
   return {
@@ -137,8 +206,14 @@ async function opencageReverse(lat: number, lng: number): Promise<GeoOut | null>
   url.searchParams.set('limit', '1');
   url.searchParams.set('no_annotations', '1');
 
-  const res = await fetch(url.toString(), { cache: 'no-store' });
-  const data = await res.json();
+  const res = await safeFetch(url.toString(), { cache: 'no-store' });
+  if (!res) return null;
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    return null;
+  }
   if (!res.ok || !data?.results?.[0]) return null;
   const r = data.results[0];
   return {
@@ -158,11 +233,18 @@ async function nominatimForward(q: string): Promise<GeoOut | null> {
   url.searchParams.set('limit', '1');
   url.searchParams.set('addressdetails', '1');
 
-  const res = await fetch(url.toString(), {
+  const res = await safeFetch(url.toString(), {
     headers: { 'User-Agent': NOMINATIM_UA },
     cache: 'no-store',
+    timeoutMs: 15000,
   });
-  const data = await res.json();
+  if (!res) return null;
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    return null;
+  }
   const r = Array.isArray(data) && data[0];
   if (!res.ok || !r) return null;
   return {
@@ -182,11 +264,18 @@ async function nominatimReverse(lat: number, lng: number): Promise<GeoOut | null
   url.searchParams.set('zoom', '18');
   url.searchParams.set('addressdetails', '1');
 
-  const res = await fetch(url.toString(), {
+  const res = await safeFetch(url.toString(), {
     headers: { 'User-Agent': NOMINATIM_UA },
     cache: 'no-store',
+    timeoutMs: 15000,
   });
-  const data = await res.json();
+  if (!res) return null;
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    return null;
+  }
   if (!res.ok || !data) return null;
   const formatted = data.display_name || `${lat}, ${lng}`;
   return {
@@ -201,18 +290,33 @@ async function nominatimReverse(lat: number, lng: number): Promise<GeoOut | null
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const input = pickQuery(body);
+    let input = pickQuery(body);
     if (!input) {
       return NextResponse.json({ error: 'Geocoding query is missing.' }, { status: 400 });
+    }
+
+    const looksLikeShort =
+      /^https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(input) ||
+      /^https?:\/\/maps\.google(?:\.[a-z.]+)?\/maps\/app/i.test(input);
+    if (looksLikeShort) {
+      const expanded = await expandGoogleMapsUrl(input);
+      if (expanded) {
+        input = expanded;
+      }
     }
 
     // a) ¿URL de Google Maps?
     const fromUrl = parseGoogleMapsUrl(input);
     if (fromUrl) {
-      const rev = (await opencageReverse(fromUrl.lat, fromUrl.lng)) ||
-                  (await nominatimReverse(fromUrl.lat, fromUrl.lng));
+      const { lat, lng, text } = fromUrl;
+      const rev = (await opencageReverse(lat, lng)) ||
+                  (await nominatimReverse(lat, lng));
       if (rev) return NextResponse.json(rev);
-      return NextResponse.json({ formatted: `${fromUrl.lat}, ${fromUrl.lng}`, lat: fromUrl.lat, lng: fromUrl.lng, source: 'fallback' });
+      if (text) {
+        const fwdFromText = (await opencageForward(text)) || (await nominatimForward(text));
+        if (fwdFromText) return NextResponse.json(fwdFromText);
+      }
+      return NextResponse.json({ formatted: `${lat}, ${lng}`, lat, lng, source: 'fallback' });
     }
 
     // b) ¿"lat,lng" literal?

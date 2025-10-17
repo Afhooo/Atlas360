@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import useSWR from 'swr';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Importa el hook que ahora centraliza toda la lógica de datos
@@ -8,14 +9,13 @@ import { useLogisticsData } from '@/hooks/useLogisticsData';
 
 // Tipos (sin cambios)
 import type { OrderRow, OrderStatus } from '@/lib/types';
+import { normalizeRole, type Role } from '@/lib/auth/roles';
 
 // Componentes (sin cambios)
 import { OrderTable } from '@/components/OrderTable';
 import OrderDetailsModal from '@/components/OrderDetailsModal';
 import DeliveryDetailsModal from '@/components/DeliveryDetailsModal';
 import { DeliveryCard } from '@/components/DeliveryCard';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/Card';
-import { Button } from '@/components/Button';
 import MapOverviewModal from '@/components/MapOverviewModal';
 import { SettlementTable } from '@/components/SettlementTable';
 import { cn } from '@/lib/utils/cn';
@@ -23,11 +23,24 @@ import { cn } from '@/lib/utils/cn';
 // Iconos (sin cambios)
 import {
   PlusCircle, RefreshCw, Search, Truck, Clock, CheckCircle2,
-  AlertTriangle, Users, Map as MapIcon, Calendar, BarChart2, Radio,
-  SlidersHorizontal, Package, Route, Warehouse, Target, TrendingUp,
+  AlertTriangle, Users, Map as MapIcon,
+  SlidersHorizontal, Package, Route, Target, TrendingUp,
   Zap, BarChart3, Eye, Filter, ArrowRight, ChevronDown, ChevronUp,
-  Activity, Navigation, MapPin, Timer, Gauge, Signal
+  Navigation, MapPin
 } from 'lucide-react';
+
+type MeResponse = {
+  ok?: boolean;
+  role?: string | null;
+  site_name?: string | null;
+  local?: string | null;
+};
+
+const fetcher = async <T = unknown>(url: string): Promise<T> => {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Error solicitando ${url}: ${response.status}`);
+  return response.json() as Promise<T>;
+};
 
 // ===================================================================================
 // COMPONENTES UI REDISEÑADOS CON ESTILO APPLE
@@ -190,6 +203,35 @@ const getBranchForOrder = (order: OrderRow): string => {
   return 'Santa Cruz';
 };
 
+const stripAccents = (value?: string | null) =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const canonicalizeCity = (value?: string | null): string | null => {
+  const normalized = stripAccents(value);
+  if (!normalized) return null;
+  if (/(^|[\s-])(el\s*alto|alto\b)/.test(normalized)) return 'El Alto';
+  if (/(la\s*paz|lpz|oruro)/.test(normalized)) return 'La Paz';
+  if (/(cocha|cbba|cochabamba)/.test(normalized)) return 'Cochabamba';
+  if (/(sucre|chuqui|potosi|tarija|villamontes)/.test(normalized)) return 'Sucre';
+  if (/(santa\s*cruz|scz|beni|pando|charagua|montero|warnes)/.test(normalized)) return 'Santa Cruz';
+  return null;
+};
+
+const getOrderCity = (order: OrderRow): string => {
+  return (
+    canonicalizeCity(order.destino) ??
+    canonicalizeCity(order.local) ??
+    canonicalizeCity(order.delivery_address) ??
+    getBranchForOrder(order)
+  );
+};
+
+const shouldRestrictRole = (role: Role) => role === 'logistica' || role === 'coordinador';
+
 const PageSurface = ({ children }: { children: React.ReactNode }) => (
   <div className="relative min-h-screen overflow-hidden bg-[color:var(--app-bg)] text-[color:var(--app-foreground)] transition-colors duration-500 ease-apple">
     <div className="pointer-events-none absolute inset-0">
@@ -221,6 +263,37 @@ export default function LogisticaPage() {
     clearError
   } = useLogisticsData();
 
+  const { data: me } = useSWR<MeResponse>('/endpoints/me', fetcher);
+  const role: Role = useMemo(() => normalizeRole(me?.role), [me?.role]);
+  const assignedCity = useMemo(
+    () => canonicalizeCity(me?.site_name) ?? canonicalizeCity(me?.local) ?? null,
+    [me?.site_name, me?.local]
+  );
+  const cityRestricted = useMemo(
+    () => shouldRestrictRole(role) && Boolean(me?.ok),
+    [role, me?.ok]
+  );
+  const visibleOrders = useMemo(() => {
+    if (!cityRestricted) return orders;
+    if (!assignedCity) return [];
+    return orders.filter(order => getOrderCity(order) === assignedCity);
+  }, [orders, cityRestricted, assignedCity]);
+  const visibleDeliveries = useMemo(() => {
+    if (!cityRestricted) return deliveries;
+    if (!assignedCity) return [];
+    return deliveries.filter(delivery => canonicalizeCity(delivery.local) === assignedCity);
+  }, [deliveries, cityRestricted, assignedCity]);
+  const visibleDeliveryIds = useMemo(
+    () => new Set(visibleDeliveries.map(d => d.id)),
+    [visibleDeliveries]
+  );
+  const visibleRoutes = useMemo(() => {
+    if (!cityRestricted) return deliveryRoutes;
+    if (!assignedCity) return [];
+    return deliveryRoutes.filter(route => visibleDeliveryIds.has(route.delivery_user_id));
+  }, [deliveryRoutes, cityRestricted, assignedCity, visibleDeliveryIds]);
+  const cityMissing = cityRestricted && !assignedCity;
+
   // --- ESTADOS LOCALES (solo para la UI) - SIN CAMBIOS ---
   const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<any | null>(null);
@@ -231,36 +304,39 @@ export default function LogisticaPage() {
 
   // Efecto para mantener los datos del modal actualizados
   useEffect(() => {
-    if (selectedOrder) {
-      const latestOrderData = orders.find(o => o.id === selectedOrder.id);
-      if (latestOrderData && JSON.stringify(latestOrderData) !== JSON.stringify(selectedOrder)) {
-        setSelectedOrder(latestOrderData);
-      }
+    if (!selectedOrder) return;
+    const latestOrderData = visibleOrders.find(o => o.id === selectedOrder.id);
+    if (!latestOrderData) {
+      setSelectedOrder(null);
+      return;
     }
-  }, [orders, selectedOrder]);
+    if (JSON.stringify(latestOrderData) !== JSON.stringify(selectedOrder)) {
+      setSelectedOrder(latestOrderData);
+    }
+  }, [visibleOrders, selectedOrder]);
 
   // Preparar datos para el mapa
   const ordersForMap = useMemo(() => {
-    return orders.map(order => ({
+    return visibleOrders.map(order => ({
       id: order.id, status: order.status, order_no: order.order_no, customer_name: order.customer_name,
       delivery_address: order.delivery_address, delivery_geo_lat: order.delivery_geo_lat,
       delivery_geo_lng: order.delivery_geo_lng, delivery_date: order.delivery_date,
       delivery_from: order.delivery_from, delivery_to: order.delivery_to
     }));
-  }, [orders]);
+  }, [visibleOrders]);
 
   // KPIs
   const kpis = useMemo(() => ({
-    total: { value: orders.length, trend: 2.5 },
-    pending: { value: orders.filter((o) => o.status === 'pending').length, trend: -1.2 },
-    inDelivery: { value: orders.filter((o) => o.status === 'out_for_delivery').length, trend: 5.8 },
-    delivered: { value: orders.filter((o) => ['delivered', 'confirmed'].includes(o.status || '')).length, trend: 3.1 },
-    efficiency: { value: orders.length > 0 ? Math.round((orders.filter(o => ['delivered', 'confirmed'].includes(o.status || '')).length / orders.length) * 100) : 0, trend: 1.7 },
-  }), [orders]);
+    total: { value: visibleOrders.length, trend: 2.5 },
+    pending: { value: visibleOrders.filter((o) => o.status === 'pending').length, trend: -1.2 },
+    inDelivery: { value: visibleOrders.filter((o) => o.status === 'out_for_delivery').length, trend: 5.8 },
+    delivered: { value: visibleOrders.filter((o) => ['delivered', 'confirmed'].includes(o.status || '')).length, trend: 3.1 },
+    efficiency: { value: visibleOrders.length > 0 ? Math.round((visibleOrders.filter(o => ['delivered', 'confirmed'].includes(o.status || '')).length / visibleOrders.length) * 100) : 0, trend: 1.7 },
+  }), [visibleOrders]);
 
   // Filtro de pedidos
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
+    return visibleOrders.filter((order) => {
       if (filters.status !== 'all' && order.status !== filters.status) return false;
       if (filters.search) {
         const search = filters.search.toLowerCase();
@@ -270,7 +346,7 @@ export default function LogisticaPage() {
       }
       return true;
     });
-  }, [orders, filters]);
+  }, [visibleOrders, filters]);
   
   // Agrupación de pedidos
   const groupedOrders = useMemo(() => {
@@ -399,6 +475,19 @@ export default function LogisticaPage() {
             </div>
           </div>
         </motion.header>
+
+        {cityMissing && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card border border-apple-orange-500/30 bg-apple-orange-500/10 text-apple-orange-200"
+          >
+            <h2 className="apple-h4 mb-2 text-apple-orange-100">Configura tu ciudad</h2>
+            <p className="apple-body text-apple-orange-200/90">
+              No encontramos una sucursal asignada a tu usuario. Solicita a un administrador que registre tu ciudad para poder visualizar y gestionar los pedidos correspondientes.
+            </p>
+          </motion.div>
+        )}
 
         <div className="max-w-[1800px] mx-auto px-6 space-y-8">
           {/* KPIs */}
@@ -565,15 +654,15 @@ export default function LogisticaPage() {
                     </div>
                     <h3 className="apple-h3 text-[color:var(--app-foreground)] dark:text-white">Unidades Activas</h3>
                   </div>
-                  <div className="badge badge-primary">{deliveries.length}</div>
+                  <div className="badge badge-primary">{visibleDeliveries.length}</div>
                 </div>
                 
                 <div className="space-y-4 max-h-[calc(100vh-12rem)] overflow-y-auto">
                   <AnimatePresence>
-                    {deliveries.length > 0 ? (
-                      deliveries.map((delivery, index) => {
+                    {visibleDeliveries.length > 0 ? (
+                      visibleDeliveries.map((delivery, index) => {
                         const today = new Date().toISOString().slice(0, 10);
-                        const todayRoutes = deliveryRoutes.filter(r => r.delivery_user_id === delivery.id && r.route_date === today);
+                        const todayRoutes = visibleRoutes.filter(r => r.delivery_user_id === delivery.id && r.route_date === today);
                         const completedToday = todayRoutes.filter(r => r.status === 'completed').length;
                         const stats = {
                           totalToday: todayRoutes.length, 
@@ -672,7 +761,7 @@ export default function LogisticaPage() {
         {selectedOrder && ( 
           <OrderDetailsModal 
             order={selectedOrder} 
-            deliveries={deliveries} 
+            deliveries={visibleDeliveries} 
             onClose={() => { setSelectedOrder(null); clearError(); }} 
             onAssignDelivery={assignDelivery} 
             onStatusChange={handleStatusChange} 
@@ -685,7 +774,7 @@ export default function LogisticaPage() {
         {selectedDelivery && ( 
           <DeliveryDetailsModal 
             delivery={selectedDelivery} 
-            routes={deliveryRoutes.filter(r => r.delivery_user_id === selectedDelivery.id)} 
+            routes={visibleRoutes.filter(r => r.delivery_user_id === selectedDelivery.id)} 
             metrics={undefined} 
             onClose={() => setSelectedDelivery(null)}
           />

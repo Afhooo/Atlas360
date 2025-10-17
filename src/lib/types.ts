@@ -27,6 +27,18 @@ export interface OrderItem {
   type?: 'BASE' | 'PROMO';
 }
 
+export interface OrderMedia {
+  id: string;
+  order_id: string;
+  type: string | null;
+  tg_file_id?: string | null;
+  file_url: string | null;
+  width?: number | null;
+  height?: number | null;
+  mime?: string | null;
+  created_at?: string | null;
+}
+
 // ---- ORDERS (tabla principal) ----
 export interface OrderRow {
   id: string;
@@ -73,6 +85,7 @@ export interface OrderRow {
   payment_proof_url?: string | null;
 
   order_items?: OrderItem[];
+  order_media?: OrderMedia[];
 
   // --- ENCOMIENDA ---
   is_encomienda?: boolean | null;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import type { FC, ReactNode } from 'react';
+import type { FC } from 'react';
 import { useTransition } from 'react';
 
 // Define el tipo de las props, heredando todas las de un botón normal

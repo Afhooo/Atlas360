@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 
 type Props = {
   onCapture: (dataUrl: string) => void;
@@ -46,7 +47,6 @@ export default function CameraCapture({ onCapture, aspectRatio = 1 }: Props) {
 
     const targetW = w;
     const targetH = Math.round(w / aspectRatio);
-    const sx = 0;
     const sy = Math.max(0, Math.round((h - targetH) / 2));
 
     c.width = targetW;
@@ -75,7 +75,14 @@ export default function CameraCapture({ onCapture, aspectRatio = 1 }: Props) {
     <div style={{ display: 'grid', gap: 10 }}>
       {/* Preview si ya hay foto */}
       {preview ? (
-        <img src={preview} alt="selfie" style={{ width: '100%', maxWidth: 480, borderRadius: 12 }} />
+        <Image
+          src={preview}
+          alt="selfie"
+          width={480}
+          height={Math.round(480 / aspectRatio)}
+          style={{ width: '100%', maxWidth: 480, borderRadius: 12, height: 'auto' }}
+          unoptimized
+        />
       ) : (
         <>
           {!error ? (

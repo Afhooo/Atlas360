@@ -28,6 +28,7 @@ export function useLogisticsData() {
           seller_profile:sales_user_id(full_name), 
           delivery_profile:delivery_assigned_to(full_name), 
           order_items(*),
+          order_media(id, type, file_url, mime, width, height, created_at),
           is_encomienda,
           fecha_salida_bodega,
           fecha_entrega_encomienda,
@@ -99,6 +100,30 @@ export function useLogisticsData() {
 
   const confirmDelivered = async (orderId: string) => {
     await handleStatusChange(orderId, 'confirmed');
+
+    const order = orders.find(o => o.id === orderId);
+    if (!order?.customer_phone) return;
+
+    try {
+      const response = await fetch(`/endpoints/orders/${orderId}/survey`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: order.customer_phone,
+          customerName: order.customer_name,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        if (payload?.skipped === 'missing_phone') return;
+        const reason = payload?.error ? `: ${payload.error}` : '';
+        setError(`Entrega confirmada, pero no se pudo enviar la encuesta${reason}`);
+      }
+    } catch (err: any) {
+      console.error('Error enviando encuesta post-entrega', err);
+      setError('Entrega confirmada, pero ocurrió un error al enviar la encuesta.');
+    }
   };
 
   // NUEVA FUNCIÓN: Actualizar fechas de encomienda

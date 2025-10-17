@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import {
-  Users, ShieldCheck, CheckCircle2, XCircle, CircleDollarSign, Search, Filter, CalendarDays, Image as ImageIcon,
+  Users, CheckCircle2, XCircle, CircleDollarSign, Search, Filter, CalendarDays, Image as ImageIcon,
 } from 'lucide-react';
 import { hasFinancialAccess } from '@/lib/auth/financial';
 
@@ -38,13 +37,6 @@ type Permission = {
   created_at: string;
 };
 
-const STATUS_LABEL: Record<Permission['status'], string> = {
-  pendiente: 'Pendiente',
-  aprobado_con_rem: 'Aprobado (con remuneración)',
-  aprobado_sin_rem: 'Aprobado (sin remuneración)',
-  rechazado: 'Rechazado',
-};
-
 export default function DashboardPermisosPage() {
   const router = useRouter();
   const { data: me } = useSWR('/endpoints/me', fetcher);
@@ -69,18 +61,18 @@ export default function DashboardPermisosPage() {
     branches: string[];
   }>(shouldFetch, fetcher);
 
-  const list = data?.list || [];
   const branches = ['Todas', ...(data?.branches || [])];
 
   const grouped = useMemo(() => {
+    const source = data?.list ?? [];
     const map = new Map<string, Permission[]>();
-    for (const r of list) {
+    for (const r of source) {
       const key = r.branch || 'Sin Sucursal';
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(r);
     }
     return Array.from(map.entries()).sort((a,b)=>a[0].localeCompare(b[0]));
-  }, [list]);
+  }, [data?.list]);
 
   const patchStatus = async (id: string, status: Permission['status']) => {
     const res = await fetch(`/endpoints/permissions/${id}`, {

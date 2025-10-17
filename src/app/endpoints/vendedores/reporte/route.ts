@@ -62,8 +62,7 @@ const CANON_BRANCH: Record<string, string> = {
 function normalize(s?: string) {
   return (s || '')
     .normalize('NFD')
-    // @ts-ignore unicode
-    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
 }

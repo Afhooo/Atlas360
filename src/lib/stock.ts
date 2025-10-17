@@ -36,9 +36,10 @@ export const adjustQty = (code: string, delta: number) => {
 };
 
 // React hook (escucha cambios)
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 export function useStock() {
   const [tick, setTick] = useState(0);
+  const [items, setItems] = useState<StockItem[]>(() => listStock());
   useEffect(() => {
     const fn = () => setTick(t => t+1);
     window.addEventListener('storage', fn);            // cambios inter-tab
@@ -48,7 +49,9 @@ export function useStock() {
       window.removeEventListener('fenix:stock:update', fn);
     };
   }, []);
-  const items = useMemo(() => listStock(), [tick]);
+  useEffect(() => {
+    setItems(listStock());
+  }, [tick]);
   const byCode = (code: string) => getStock(code)?.qty ?? 0;
   return { items, byCode, setQty, adjustQty, upsertMany };
 }

@@ -9,13 +9,9 @@ export const revalidate = 0;
 const U = (s?: string | null) => (s || '').trim().toUpperCase();
 const isAllowedRole = (raw?: string | null, norm?: string | null) => {
   const s = U(norm || raw);
-  return (
-    s.includes('ASESOR') ||
-    s.includes('VENDEDOR') ||
-    s.includes('COORDINAD') || // COORDINADOR/COORDINADORA
-    s.includes('LIDER') ||
-    s.includes('SUPERVISOR')
-  );
+  if (!s) return true;
+  if (s.includes('PROMOTOR')) return false;
+  return true;
 };
 
 // Haversine en metros
@@ -138,11 +134,9 @@ export async function GET(req: Request) {
       out.push(r);
     }
 
-    // 5) opcional: devuelve solo GPS válidos (o cámbialo a ambos con flag)
-    const filtered = out.filter(r => r.gps_valid);
-
+    // 5) devolver todos los registros (marcamos gps_valid para la UI, pero no se filtra aquí)
     return NextResponse.json(
-      { data: filtered, meta: { count, page, per_page: perPage } },
+      { data: out, meta: { count, page, per_page: perPage } },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (e: any) {

@@ -1,6 +1,7 @@
 // src/app/endpoints/orders/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isSupabaseTransientError, withSupabaseRetry } from '@/lib/supabase';
 import { geocodeFirstOSM, normalizeAddressForSantaCruz } from '@/lib/geocode';
 
 export const runtime = 'nodejs'; // Necesario para usar SERVICE_ROLE en Vercel
@@ -19,6 +20,11 @@ type OrderItemIn = {
   product_name: string;
   quantity: number;
   unit_price: number;
+  sale_type?: string | null;
+  image_url?: string | null;
+  original_name?: string | null;
+  is_recognized?: boolean | null;
+  base_product_name?: string | null;
 };
 
 type Payload = {
@@ -182,40 +188,56 @@ export async function POST(req: NextRequest) {
     const sales_role_final = normalizeSalesRole(raw_sales_role);
 
     // 1) ORDER
-    const { data: orderIns, error: orderErr } = await supabase
-      .from('orders')
-      .insert([{
-        sale_type,
-        local,
+    let orderResp;
+    try {
+      orderResp = await withSupabaseRetry(async () => {
+        return await supabase
+          .from('orders')
+          .insert([{
+            sale_type,
+            local,
 
-        // Compat (operativo):
-        seller: seller.trim(),
-        seller_role: seller_role_clean,
-        is_promoter,
+            // Compat (operativo):
+            seller: seller.trim(),
+            seller_role: seller_role_clean,
+            is_promoter,
 
-        // NUEVO (comercial):
-        sales_user_id: sales_user_id ?? null,
-        sales_role: sales_role_final,
+            // NUEVO (comercial):
+            sales_user_id: sales_user_id ?? null,
+            sales_role: sales_role_final,
 
-        destino,
-        customer_id,
-        customer_phone,
-        numero,
-        amount,
-        sistema: !!sistema,
+            destino,
+            customer_id,
+            customer_phone,
+            numero,
+            amount,
+            sistema: !!sistema,
 
-        // nuevos
-        customer_name,
-        payment_method,
-        address,           // guardas lo que te llega
-        notes,
-        delivery_date: delivery_date ? delivery_date : null,
-        delivery_from: delivery_from ? delivery_from : null,
-        delivery_to: delivery_to ? delivery_to : null,
-        items_summary,
-      }])
-      .select('id, order_no')
-      .single();
+            // nuevos
+            customer_name,
+            payment_method,
+            address,           // guardas lo que te llega
+            notes,
+            delivery_date: delivery_date ? delivery_date : null,
+            delivery_from: delivery_from ? delivery_from : null,
+            delivery_to: delivery_to ? delivery_to : null,
+            items_summary,
+          }])
+          .select('id, order_no')
+          .single();
+      });
+    } catch (err) {
+      if (isSupabaseTransientError(err)) {
+        console.error('Supabase orders insert transient error:', err);
+        return NextResponse.json(
+          { error: 'No se pudo conectar a la base de datos. Intenta nuevamente en unos segundos.' },
+          { status: 503 }
+        );
+      }
+      throw err;
+    }
+
+    const { data: orderIns, error: orderErr } = orderResp;
 
     if (orderErr || !orderIns) {
       console.error('Failed to insert order', orderErr);
@@ -239,9 +261,32 @@ export async function POST(req: NextRequest) {
       quantity: it.quantity,
       unit_price: money(it.unit_price),
       subtotal: money(it.quantity * it.unit_price),
+      sale_type: it.sale_type ?? null,
+      image_url: it.image_url ?? null,
+      original_name: it.original_name ?? null,
+      is_recognized: typeof it.is_recognized === 'boolean' ? it.is_recognized : null,
+      base_product_name: it.base_product_name ?? null,
     }));
 
-    const { error: itemsErr } = await supabase.from('order_items').insert(itemsPayload);
+    let itemsResp;
+    try {
+      itemsResp = await withSupabaseRetry(async () => {
+        return await supabase.from('order_items').insert(itemsPayload);
+      });
+    } catch (err) {
+      if (isSupabaseTransientError(err)) {
+        await supabase.from('orders').delete().eq('id', orderId);
+        console.error('Supabase order_items insert transient error:', err);
+        return NextResponse.json(
+          { error: 'No se pudieron registrar los productos. Intenta nuevamente en unos segundos.' },
+          { status: 503 }
+        );
+      }
+      throw err;
+    }
+
+    const { error: itemsErr } = itemsResp;
+
     if (itemsErr) {
       // Rollback manual
       await supabase.from('order_items').delete().eq('order_id', orderId);

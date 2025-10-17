@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import useSWR from 'swr';
 import { usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Menu } from 'lucide-react';
 
 import { Sidebar } from '@/components/nav/Sidebar';
 import { normalizeRole, type Role } from '@/lib/auth/roles';

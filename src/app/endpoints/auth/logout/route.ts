@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
  * POST /endpoints/auth/logout
  * Alternativa para logout vía POST (para formularios o fetch)
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const response = NextResponse.json(
       { ok: true, message: 'Sesión cerrada exitosamente' },

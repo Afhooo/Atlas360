@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type Grouping = 'day'|'week'|'month';
 
@@ -63,7 +63,7 @@ export default function MisVentasPromotor() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Resp|null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const qs = new URLSearchParams({ from, to }).toString();
@@ -76,9 +76,9 @@ export default function MisVentasPromotor() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [from, to]);
 
-  useEffect(()=>{ load(); /* eslint-disable-next-line */ },[]);
+  useEffect(() => { load(); }, [load]);
 
   const grouped = useMemo(()=>{
     const rows = data?.rows || [];

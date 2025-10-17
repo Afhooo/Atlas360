@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Textarea } from '@/components/Textarea';
@@ -9,6 +10,7 @@ import { Label } from '@/components/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/select';
 import { Separator } from '@/components/separator';
 import { toast } from 'sonner';
+import { supabaseClient } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Loader2, Plus, Trash2, Search, CheckCircle, XCircle,
@@ -18,7 +20,6 @@ import {
 
 type ProductSearchResult = { name: string; code: string; image_url?: string | null };
 type PaymentMethod = { method: 'EFECTIVO' | 'QR' | 'TRANSFERENCIA'; amount: number };
-
 type DisplayOrderItem = {
   product_name: string;
   quantity: number;
@@ -63,12 +64,20 @@ type PartialOrder = {
   customer_phone: string;
   payments: PaymentMethod[];
   seller_name: string;
+  seller_role: 'ASESOR' | 'PROMOTOR' | 'delivery' | 'repartidor' | null;
+  sales_user_id: string | null;
 };
 
 const formatDate = (date: Date): string => date.toISOString().split('T')[0];
 const formatTime = (date: Date): string => date.toTimeString().slice(0, 5);
 
-const getInitialOrderState = (sellerName = 'Vendedor'): PartialOrder => {
+const ORDER_MEDIA_BUCKET = process.env.NEXT_PUBLIC_ORDER_MEDIA_BUCKET || 'order-images';
+
+const getInitialOrderState = (
+  sellerName = 'Vendedor',
+  sellerRole: PartialOrder['seller_role'] = null,
+  salesUserId: string | null = null
+): PartialOrder => {
   const now = new Date();
   const oneHour = new Date(now.getTime() + 60 * 60 * 1000);
   return {
@@ -90,6 +99,8 @@ const getInitialOrderState = (sellerName = 'Vendedor'): PartialOrder => {
     customer_phone: '',
     payments: [],
     seller_name: sellerName,
+    seller_role: sellerRole,
+    sales_user_id: salesUserId,
   };
 };
 
@@ -109,14 +120,27 @@ function debounce<F extends (...args: any[]) => void>(fn: F, delay = 300) {
   };
 }
 
+const mapRoleToSellerRole = (
+  role?: string | null,
+  rawRole?: string | null
+): PartialOrder['seller_role'] => {
+  const candidates = [role, rawRole].filter(Boolean) as string[];
+  for (const value of candidates) {
+    const upper = value.trim().toUpperCase();
+    if (upper === 'PROMOTOR' || upper === 'PROMOTORA') return 'PROMOTOR';
+    if (['DELIVERY', 'LOGISTICA', 'REPARTIDOR', 'REPARTIDORA', 'RUTAS'].includes(upper)) {
+      return 'delivery';
+    }
+  }
+  return 'ASESOR';
+};
+
 export default function CapturaPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [order, setOrder] = useState<PartialOrder>(getInitialOrderState());
-  const [productInput, setProductInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeMsg, setGeocodeMsg] = useState<{ ok: boolean; msg: string } | null>(null);
-
   // ---- CARGA VENDEDOR ----
   useEffect(() => {
     (async () => {
@@ -124,9 +148,21 @@ export default function CapturaPage() {
         const r = await fetch('/endpoints/me', { cache: 'no-store' });
         const d = await r.json();
         if (!r.ok || !d?.ok) throw new Error(d?.error || 'Sesión inválida');
-        setOrder(p => ({ ...p, seller_name: d.full_name || 'Vendedor' }));
+        const mappedRole = mapRoleToSellerRole(d.role, d.raw_role);
+        const salesUserId = d.person_pk || d.auth_user_id || null;
+        setOrder(p => ({
+          ...p,
+          seller_name: d.full_name || 'Vendedor',
+          seller_role: mappedRole,
+          sales_user_id: salesUserId,
+        }));
       } catch {
-        setOrder(p => ({ ...p, seller_name: 'Vendedor' }));
+        setOrder(p => ({
+          ...p,
+          seller_name: 'Vendedor',
+          seller_role: 'ASESOR',
+          sales_user_id: null,
+        }));
       }
     })();
   }, []);
@@ -239,6 +275,27 @@ export default function CapturaPage() {
     setOrder(p => ({ ...p, items: p.items.filter((_, i) => i !== index) }));
   };
 
+  const addEmptyItem = () => {
+    setOrder(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          product_name: '',
+          original_name: '',
+          quantity: 1,
+          unit_price: 0,
+          sale_type: 'RETAIL',
+          product_code: null,
+          image_url: null,
+          is_uploading_image: false,
+          is_recognized: null,
+          similar_options: [],
+        },
+      ],
+    }));
+  };
+
   const handleCopyToClipboard = useCallback(async (value: string, successMessage: string) => {
     try {
       if (typeof navigator === 'undefined' || !navigator.clipboard) throw new Error('Clipboard API no disponible');
@@ -248,54 +305,6 @@ export default function CapturaPage() {
       toast.error('No se pudo copiar al portapapeles');
     }
   }, []);
-
-  // ---- INTERPRETACIÓN (paso 1) ----
-  const interpretFullOrder = async () => {
-    if (!productInput.trim()) {
-      toast.error('Pega el texto del pedido');
-      return;
-    }
-    setIsProcessing(true);
-    try {
-      const resp = await fetch('/endpoints/products/interpret', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: productInput }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.error || 'Error al interpretar');
-
-      const processed: DisplayOrderItem[] = (data?.items || []).map((it: any) => {
-        const sim: ProductSearchResult[] = mapSearchResponse({ results: it.similar_options || [] });
-        return {
-          product_name: it.product_name || it.name || '',
-          quantity: Number(it.quantity || it.qty || 0),
-          unit_price: Number(it.unit_price || 0),
-          product_code: it.product_code ?? null,
-          sale_type: it.sale_type === 'WHOLESALE' || it.sale_type === 'RETAIL' ? it.sale_type : undefined,
-          image_url: it.image_url ?? null,
-          is_recognized: sim.length ? false : (typeof it.is_recognized === 'boolean' ? it.is_recognized : null),
-          original_name: it.original_name || it.product_name || it.name || '',
-          similar_options: sim,
-        };
-      });
-
-      setOrder(p => ({
-        ...p,
-        items: processed,
-        customer_name: data.customer_name || p.customer_name,
-        customer_phone: data.customer_phone ? normalizePhone(data.customer_phone) : p.customer_phone,
-        notes: [p.notes, data.notes, data.delivery_time_notes].filter(Boolean).join(' | '),
-        payments: data.payment_amount ? [{ method: 'EFECTIVO', amount: Number(data.payment_amount) }] : p.payments,
-      }));
-      toast.success('Pedido interpretado');
-      setCurrentStep(2);
-    } catch (e: any) {
-      toast.error(e?.message || 'Fallo interpretando');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   // ---- GEOCODING (paso 3) ----
   const handleGeocodeAddress = async () => {
@@ -380,12 +389,41 @@ export default function CapturaPage() {
   // ---- CARGA DE IMAGEN ----
   const handleImageUpload = async (idx: number, file: File) => {
     updateItem(idx, { is_uploading_image: true });
+    let previewUrl: string | null = null;
     try {
-      await new Promise(r => setTimeout(r, 700));
-      const url = URL.createObjectURL(file);
-      updateItem(idx, { image_url: url });
-      toast.success('Foto cargada');
+      if (!ORDER_MEDIA_BUCKET) {
+        throw new Error('Bucket de almacenamiento no configurado');
+      }
+
+      previewUrl = URL.createObjectURL(file);
+      updateItem(idx, { image_url: previewUrl });
+
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '-').toLowerCase();
+      const uniqueId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2);
+      const path = `orders/${new Date().toISOString().slice(0, 10)}/${uniqueId}-${baseName}.${ext}`;
+
+      const uploadRes = await supabaseClient.storage
+        .from(ORDER_MEDIA_BUCKET)
+        .upload(path, file, { cacheControl: '3600', upsert: true });
+      if (uploadRes.error) throw uploadRes.error;
+
+      const { data: publicData } = supabaseClient.storage
+        .from(ORDER_MEDIA_BUCKET)
+        .getPublicUrl(path);
+      if (!publicData?.publicUrl) throw new Error('No se pudo generar la URL pública de la imagen.');
+
+      updateItem(idx, { image_url: publicData.publicUrl });
+      toast.success('Foto subida');
+    } catch (err: any) {
+      console.error('Error subiendo foto de producto:', err);
+      toast.error(err?.message || 'No se pudo subir la foto del producto');
+      updateItem(idx, { image_url: null });
     } finally {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
       updateItem(idx, { is_uploading_image: false });
     }
   };
@@ -417,10 +455,15 @@ export default function CapturaPage() {
       const allWholesale = order.items.length > 0 && order.items.every(i => i.sale_type === 'WHOLESALE');
       const saleTypeOrder: 'unidad' | 'mayor' = allWholesale ? 'mayor' : 'unidad';
       const mainMethod = payTotal > 0 ? order.payments[0].method : null;
+      const sellerRole = order.seller_role ?? 'ASESOR';
+      const salesRole: 'ASESOR' | 'PROMOTOR' | null =
+        sellerRole === 'PROMOTOR' ? 'PROMOTOR' : sellerRole === 'ASESOR' ? 'ASESOR' : null;
 
       const payload = {
         seller: order.seller_name,
-        seller_role: null as string | null,
+        seller_role: sellerRole,
+        sales_user_id: order.sales_user_id,
+        sales_role: salesRole,
         sale_type: saleTypeOrder,
         local: 'Santa Cruz' as const, // default sucursal
         destino: order.destino || null,
@@ -464,8 +507,7 @@ export default function CapturaPage() {
       }
 
       toast.success(`✅ Pedido #${data.order_no ?? 'creado'} guardado con éxito`);
-      setOrder(getInitialOrderState(order.seller_name));
-      setProductInput('');
+      setOrder(getInitialOrderState(order.seller_name, order.seller_role, order.sales_user_id));
       setCurrentStep(1);
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar');
@@ -474,7 +516,7 @@ export default function CapturaPage() {
     }
   };
 
-  // ---- Estado local para inputs del PASO 4 ----
+  // ---- Estado local para inputs del PASO 3 ----
   const [localName, setLocalName] = useState('');
   const [localPhone, setLocalPhone] = useState('');
 
@@ -507,7 +549,7 @@ export default function CapturaPage() {
           
           {/* Progress Steps */}
           <div className="flex items-center justify-center gap-2 sm:gap-4 max-w-3xl mx-auto">
-            {[1,2,3,4,5].map((step, i) => (
+            {[1,2,3,4].map((step, i) => (
               <motion.div 
                 key={step} 
                 className="flex items-center flex-grow"
@@ -526,7 +568,7 @@ export default function CapturaPage() {
                 >
                   {step}
                 </motion.div>
-                {i < 4 && (
+                {i < 3 && (
                   <div className={`flex-1 h-0.5 mx-2 transition-all duration-300 ${
                     step < currentStep ? 'bg-blue-500' : 'bg-white/20'
                   }`} />
@@ -539,78 +581,6 @@ export default function CapturaPage() {
         <AnimatePresence mode="wait">
           {/* PASO 1 */}
           {currentStep === 1 && (
-            <motion.div
-              key="step1"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.5 }}
-              className="relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl"></div>
-              <Card className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl">
-                <CardHeader>
-                  <CardTitle className="text-2xl text-white flex items-center gap-3 p-6">
-                    <div className="p-2 bg-blue-500/20 backdrop-blur-sm border border-blue-500/30 rounded-lg">
-                      <ClipboardPaste className="w-6 h-6 text-blue-400" />
-                    </div>
-                    Paso 1: Pegar Pedido Completo
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6 p-6 pt-0">
-                  <Textarea 
-                    rows={8} 
-                    className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all text-base resize-none"
-                    placeholder="Pega aquí el pedido completo con productos, cantidades, precios..."
-                    value={productInput} 
-                    onChange={e => setProductInput(e.target.value)} 
-                  />
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        onClick={interpretFullOrder} 
-                        disabled={isProcessing || !productInput.trim()}
-                        className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white font-bold text-base py-4 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                            Interpretando…
-                          </>
-                        ) : (
-                          'Interpretar y Continuar'
-                        )}
-                      </Button>
-                    </motion.div>
-                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        onClick={() => setOrder(p => ({
-                          ...p, 
-                          items: [...p.items, {
-                            product_name: '', 
-                            quantity: 0, 
-                            unit_price: 0, 
-                            sale_type: undefined,
-                            product_code: null, 
-                            is_recognized: null, 
-                            similar_options: [], 
-                            image_url: null
-                          } as DisplayOrderItem]
-                        }))} 
-                        className="w-full sm:w-64 bg-gradient-to-r from-green-500/30 to-green-600/30 backdrop-blur-sm border border-green-500/30 text-white font-bold text-base py-4 rounded-xl hover:from-green-500/40 hover:to-green-600/40 transition-all duration-300"
-                      >
-                        <Plus className="w-5 h-5 mr-2" />
-                        Añadir manualmente
-                      </Button>
-                    </motion.div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* PASO 2 */}
-          {currentStep === 2 && (
             <motion.div
               key="step2"
               initial={{ opacity: 0, x: 50 }}
@@ -626,17 +596,29 @@ export default function CapturaPage() {
                     <div className="p-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-lg">
                       <PackageSearch className="w-6 h-6 text-green-400" />
                     </div>
-                    Paso 2: Revisar y Normalizar Productos
+                    Paso 1: Revisar y Normalizar Productos
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-0 space-y-6">
+                  <div className="space-y-2 text-white/70">
+                    <p>Registra los productos directamente desde el inventario. Cada item debe quedar con nombre homologado, código, foto y precio confirmado antes de avanzar.</p>
+                    <p className="text-white/50 text-sm">Utiliza el buscador para evitar discrepancias y mantén todos los campos completos.</p>
+                  </div>
                   {order.items.length === 0 && (
                     <motion.div 
-                      className="p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-white/70 text-center"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
+                      className="p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-white/70 text-center space-y-4"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
                     >
-                      No hay productos. Añade uno o vuelve al paso 1.
+                      <p>No hay productos registrados todavía. Añade uno y normalízalo desde la tarjeta del producto.</p>
+                      <div className="flex justify-center">
+                        <Button
+                          onClick={addEmptyItem}
+                          className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500/30 to-green-600/30 backdrop-blur-sm border border-green-500/30 text-white hover:from-green-500/40 hover:to-green-600/40 transition-all"
+                        >
+                          <Plus className="w-4 h-4" /> Añadir primer producto
+                        </Button>
+                      </div>
                     </motion.div>
                   )}
 
@@ -656,12 +638,12 @@ export default function CapturaPage() {
                             <div className="md:col-span-2">
                               <Label className="text-white/70 font-medium mb-2 block">Producto</Label>
                               <Input
-                                defaultValue={it.product_name}
+                                value={it.product_name ?? ''}
                                 placeholder="Ej: soporte de celular one…"
                                 className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
                                 onChange={(e) => {
                                   const v = e.target.value;
-                                  updateItem(idx, { product_name: v, product_code: null, is_recognized: null, similar_options: [] });
+                                  updateItem(idx, { product_name: v, original_name: v, product_code: null, is_recognized: null, similar_options: [] });
                                   makeDebouncedSimilarUpdater(idx)(v);
                                 }}
                               />
@@ -716,7 +698,13 @@ export default function CapturaPage() {
                                         whileTap={{ scale: 0.95 }}
                                       >
                                         {opt.image_url && (
-                                          <img src={opt.image_url} alt="" className="w-6 h-6 rounded object-cover" />
+                                          <Image
+                                            src={opt.image_url}
+                                            alt={`${opt.name} sugerido`}
+                                            width={24}
+                                            height={24}
+                                            className="w-6 h-6 rounded object-cover"
+                                          />
                                         )}
                                         <span>{opt.name}</span>
                                         {opt.code && <span className="opacity-70">({opt.code})</span>}
@@ -855,22 +843,10 @@ export default function CapturaPage() {
 
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button
-                      onClick={() => setOrder(p => ({
-                        ...p, 
-                        items: [...p.items, { 
-                          product_name: '', 
-                          quantity: 0, 
-                          unit_price: 0, 
-                          sale_type: undefined, 
-                          product_code: null, 
-                          is_recognized: null, 
-                          similar_options: [], 
-                          image_url: null 
-                        } as DisplayOrderItem]
-                      }))}
+                      onClick={addEmptyItem}
                       className="w-full bg-gradient-to-r from-green-500/30 to-green-600/30 backdrop-blur-sm border border-green-500/30 text-white font-bold text-base py-4 rounded-xl hover:from-green-500/40 hover:to-green-600/40 transition-all duration-300 flex items-center justify-center gap-2"
                     >
-                      <Plus className="w-5 h-5" /> Añadir Producto
+                      <Plus className="w-5 h-5" /> {order.items.length > 0 ? 'Añadir otro producto' : 'Añadir producto'}
                     </Button>
                   </motion.div>
 
@@ -883,19 +859,10 @@ export default function CapturaPage() {
                     <span className="text-green-400">Bs. {total.toFixed(2)}</span>
                   </motion.div>
 
-                  <div className="flex gap-4 mt-6">
-                    <motion.div className="w-full sm:w-1/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setCurrentStep(1)} 
-                        className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 py-3"
-                      >
-                        Volver
-                      </Button>
-                    </motion.div>
+                  <div className="flex gap-4 mt-6 justify-end">
                     <motion.div className="w-full sm:w-2/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <Button 
-                        onClick={() => setCurrentStep(3)} 
+                        onClick={() => setCurrentStep(2)} 
                         disabled={!isStep2Valid}
                         className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white font-bold text-base py-3 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
                       >
@@ -919,8 +886,8 @@ export default function CapturaPage() {
             </motion.div>
           )}
 
-          {/* PASO 3 */}
-          {currentStep === 3 && (
+          {/* PASO 2 */}
+          {currentStep === 2 && (
             <motion.div
               key="step3"
               initial={{ opacity: 0, x: 50 }}
@@ -936,7 +903,7 @@ export default function CapturaPage() {
                     <div className="p-2 bg-orange-500/20 backdrop-blur-sm border border-orange-500/30 rounded-lg">
                       <Truck className="w-6 h-6 text-orange-400" />
                     </div>
-                    Paso 3: Detalles de Entrega
+                    Paso 2: Detalles de Entrega
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-0 space-y-6">
@@ -1130,7 +1097,7 @@ export default function CapturaPage() {
                     <motion.div className="w-full sm:w-1/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <Button 
                         variant="outline" 
-                        onClick={() => setCurrentStep(2)} 
+                        onClick={() => setCurrentStep(1)} 
                         className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 py-3"
                       >
                         Volver
@@ -1138,7 +1105,7 @@ export default function CapturaPage() {
                     </motion.div>
                     <motion.div className="w-full sm:w-2/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <Button 
-                        onClick={() => setCurrentStep(4)} 
+                        onClick={() => setCurrentStep(3)} 
                         disabled={!isStep3Valid}
                         className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white font-bold text-base py-3 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                       >
@@ -1162,8 +1129,8 @@ export default function CapturaPage() {
             </motion.div>
           )}
 
-          {/* PASO 4 */}
-          {currentStep === 4 && (
+          {/* PASO 3 */}
+          {currentStep === 3 && (
             <motion.div
               key="step4"
               initial={{ opacity: 0, x: 50 }}
@@ -1179,7 +1146,7 @@ export default function CapturaPage() {
                     <div className="p-2 bg-purple-500/20 backdrop-blur-sm border border-purple-500/30 rounded-lg">
                       <User className="w-6 h-6 text-purple-400" />
                     </div>
-                    Paso 4: Datos del Cliente
+                    Paso 3: Datos del Cliente
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-0 space-y-6">
@@ -1206,7 +1173,7 @@ export default function CapturaPage() {
                     <motion.div className="w-full sm:w-1/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <Button 
                         variant="outline" 
-                        onClick={() => setCurrentStep(3)} 
+                        onClick={() => setCurrentStep(2)} 
                         className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 py-3"
                       >
                         Volver
@@ -1214,7 +1181,7 @@ export default function CapturaPage() {
                     </motion.div>
                     <motion.div className="w-full sm:w-2/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <Button 
-                        onClick={() => setCurrentStep(5)} 
+                        onClick={() => setCurrentStep(4)} 
                         disabled={!isStep4Valid}
                         className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white font-bold text-base py-3 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                       >
@@ -1238,8 +1205,8 @@ export default function CapturaPage() {
             </motion.div>
           )}
 
-          {/* PASO 5 */}
-          {currentStep === 5 && (
+          {/* PASO 4 */}
+          {currentStep === 4 && (
             <motion.div
               key="step5"
               initial={{ opacity: 0, x: 50 }}
@@ -1255,7 +1222,7 @@ export default function CapturaPage() {
                     <div className="p-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-lg">
                       <CreditCard className="w-6 h-6 text-green-400" />
                     </div>
-                    Paso 5: Pagos y Resumen
+                    Paso 4: Pagos y Resumen
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-0 space-y-6">
@@ -1364,7 +1331,7 @@ export default function CapturaPage() {
                     <motion.div className="w-full sm:w-1/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <Button 
                         variant="outline" 
-                        onClick={() => setCurrentStep(4)} 
+                        onClick={() => setCurrentStep(3)} 
                         className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 py-3"
                       >
                         Volver

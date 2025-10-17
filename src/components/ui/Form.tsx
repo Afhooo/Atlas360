@@ -49,7 +49,7 @@ const FormGroup = React.forwardRef<
     error?: string;
     required?: boolean;
   }
->(({ className, error, required, children, ...props }, ref) => (
+>(({ className, error, required: _required, children, ...props }, ref) => (
   <div
     ref={ref}
     className={cn('space-y-2', error && 'animate-shake', className)}

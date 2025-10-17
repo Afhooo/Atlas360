@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { useStock } from '@/lib/stock';
-import { Upload, Save, Search, Trash2, Download } from 'lucide-react';
+import { Upload, Search, Download } from 'lucide-react';
 
 export default function StockManager() {
   const { items, upsertMany, setQty } = useStock();

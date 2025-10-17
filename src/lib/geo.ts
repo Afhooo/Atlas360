@@ -38,7 +38,7 @@ export async function getBestLocation(opts?: {
       if (fix.accuracy <= minAcc) break;
       // Espera breve para permitir refinar satélites
       await new Promise(r => setTimeout(r, 300));
-    } catch (_) {
+    } catch {
       // ignora errores intermedios y sigue intentando
     }
   }

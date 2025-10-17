@@ -215,8 +215,8 @@ const FallbackSelfie: React.FC<{
     reader.onload = async () => {
       const raw = String(reader.result || '');
       try {
-        // @ts-ignore
-        const small = typeof compressDataUrl === 'function' ? await compressDataUrl(raw, 720, 0.72) : raw;
+        const compress = (globalThis as { compressDataUrl?: (dataUrl: string, maxWidth: number, quality: number) => string | Promise<string> }).compressDataUrl;
+        const small = typeof compress === 'function' ? await compress(raw, 720, 0.72) : raw;
         onCapture(small);
       } catch {
         onCapture(raw);
@@ -322,7 +322,7 @@ export default function AsistenciaPage() {
               const found = jj?.result ?? (Array.isArray(jj?.results) ? jj.results[0] : jj);
               if (found?.id) {
                 setSiteId(found.id);
-                setSiteName(found.name ?? siteName ?? 'Sucursal');
+                setSiteName(prev => found.name ?? prev ?? 'Sucursal');
                 return;
               }
             }
@@ -389,7 +389,7 @@ export default function AsistenciaPage() {
         setResolvingSite(false);
       }
     })();
-  }, [me?.id, me?.local]);
+  }, [me?.id, me?.local, siteId]);
 
   if (!mounted) {
     return (

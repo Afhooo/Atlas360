@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
-import type { OrderRow, DeliveryUser, OrderStatus, LatLng, OrderItem } from '@/lib/types';
+import Image from 'next/image';
+import type { OrderRow, DeliveryUser, OrderStatus, LatLng } from '@/lib/types';
 
 import { Button } from './Button';
 import { StatusBadge } from './StatusBadge';
@@ -93,11 +94,31 @@ export default function OrderDetailsModal({
   const [mediaLoading, setMediaLoading] = useState(false);
 
   const productImages = useMemo(() => {
-    const images = (order.order_items ?? [])
-      .map(item => item.image_url)
-      .filter((url): url is string => !!url);
-    return [...new Set(images)];
-  }, [order.order_items]);
+    const unique = new Set<string>();
+    const results: string[] = [];
+
+    (order.order_media ?? []).forEach(media => {
+      if (!media?.file_url) return;
+      const mediaType = (media.type || '').toLowerCase();
+      if (mediaType && !['product', 'producto', 'seller'].includes(mediaType)) {
+        return;
+      }
+      if (!unique.has(media.file_url)) {
+        unique.add(media.file_url);
+        results.push(media.file_url);
+      }
+    });
+
+    (order.order_items ?? []).forEach(item => {
+      if (!item?.image_url) return;
+      if (!unique.has(item.image_url)) {
+        unique.add(item.image_url);
+        results.push(item.image_url);
+      }
+    });
+
+    return results;
+  }, [order.order_media, order.order_items]);
   
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const paymentUrl = useMemo(() => order.payment_proof_url ?? null, [order.payment_proof_url]);
@@ -476,10 +497,13 @@ export default function OrderDetailsModal({
                     <div className="space-y-3">
                       <div className="relative group">
                         <a href={productImages[currentImageIndex]} target="_blank" rel="noopener noreferrer" title="Ver imagen completa">
-                          <img 
-                            src={productImages[currentImageIndex]} 
-                            alt={`Foto de producto ${currentImageIndex + 1}`} 
-                            className="w-full h-60 object-contain rounded-md bg-black/30 transition-transform duration-300 group-hover:scale-105" 
+                          <Image
+                            src={productImages[currentImageIndex]}
+                            alt={`Foto de producto ${currentImageIndex + 1}`}
+                            width={800}
+                            height={600}
+                            className="w-full h-60 object-contain rounded-md bg-black/30 transition-transform duration-300 group-hover:scale-105"
+                            unoptimized
                           />
                         </a>
                         {productImages.length > 1 && (
@@ -495,12 +519,15 @@ export default function OrderDetailsModal({
                       {productImages.length > 1 && (
                         <div className="flex gap-2 justify-center flex-wrap">
                           {productImages.map((url, index) => (
-                            <img
+                            <Image
                               key={index}
                               src={url}
                               alt={`Thumbnail ${index + 1}`}
+                              width={48}
+                              height={48}
                               onClick={() => setCurrentImageIndex(index)}
                               className={`w-12 h-12 object-cover rounded-md cursor-pointer border-2 ${currentImageIndex === index ? 'border-blue-500' : 'border-transparent hover:border-white/50'}`}
+                              unoptimized
                             />
                           ))}
                         </div>
@@ -516,7 +543,14 @@ export default function OrderDetailsModal({
                   <div className="text-white/80 font-medium mb-2">Comprobante de pago</div>
                   {paymentUrl ? (
                     <a href={paymentUrl} target="_blank" rel="noopener noreferrer" title="Ver imagen completa">
-                      <img src={paymentUrl} alt="Comprobante de pago" className="w-full h-72 object-contain rounded-md bg-black/30 transition-transform duration-300 hover:scale-105" />
+                      <Image
+                        src={paymentUrl}
+                        alt="Comprobante de pago"
+                        width={800}
+                        height={600}
+                        className="w-full h-72 object-contain rounded-md bg-black/30 transition-transform duration-300 hover:scale-105"
+                        unoptimized
+                      />
                     </a>
                   ) : (
                     <div className="w-full h-72 rounded-md bg-black/20 border border-dashed border-white/15 flex items-center justify-center text-white/50 text-sm">

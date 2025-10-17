@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { motion } from 'framer-motion';
-import { DollarSign, Package, Users, TrendingUp, TrendingDown, Briefcase, Building, BarChartHorizontal } from 'lucide-react';
+import { DollarSign, Package, Users, TrendingUp, TrendingDown, Briefcase } from 'lucide-react';
 
 // === TIPOS DE DATOS FINANCIEROS ===
 interface MonthlyData { [month: string]: number; }

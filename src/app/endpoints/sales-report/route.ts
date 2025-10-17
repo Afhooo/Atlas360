@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin, withSupabaseRetry, isSupabaseTransientError } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,19 +16,12 @@ function normalizeName(name: string): string {
 }
 
 // --- Helper de Supabase ---
-function sbAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
 // --- Función de Mapeo de Personal ---
-async function getPeopleMaps(sb: ReturnType<typeof sbAdmin>) {
-  const { data, error } = await sb.from('people').select('id, full_name, role, local');
-  if (error) {
-    console.error("Error fetching people:", error);
-    return { peopleById: new Map(), peopleByName: new Map() };
-  }
+async function getPeopleMaps(sb: ReturnType<typeof supabaseAdmin>) {
+  const { data, error } = await withSupabaseRetry(async () => {
+    return await sb.from('people').select('id, full_name, role, local');
+  });
+  if (error) throw error;
   
   const peopleById = new Map<string, PersonData>();
   const peopleByName = new Map<string, PersonData>();
@@ -44,18 +37,32 @@ async function getPeopleMaps(sb: ReturnType<typeof sbAdmin>) {
 
 // --- API ENDPOINT MAESTRO ---
 export async function GET(request: NextRequest) {
-  const sb = sbAdmin();
+  let sb;
+  try {
+    sb = supabaseAdmin();
+  } catch (err: any) {
+    console.error('Error creando cliente Supabase:', err);
+    return NextResponse.json({ error: 'Configuración de Supabase inválida' }, { status: 500 });
+  }
   const { searchParams } = request.nextUrl;
   const channelFilter = searchParams.get('channel');
 
   try {
     const { peopleById, peopleByName } = await getPeopleMaps(sb);
 
-    const { data: items, error: itemsError } = await sb.from('order_items').select('*');
+    const { data: items, error: itemsError } = await withSupabaseRetry(async () => {
+      return await sb.from('order_items').select('*');
+    });
     if (itemsError) throw itemsError;
 
     const orderIds = [...new Set(items.map(item => item.order_id))];
-    const { data: orders, error: ordersError } = await sb.from('orders').select('*').in('id', orderIds);
+    if (orderIds.length === 0) {
+      return NextResponse.json([], { status: 200 });
+    }
+
+    const { data: orders, error: ordersError } = await withSupabaseRetry(async () => {
+      return await sb.from('orders').select('*').in('id', orderIds);
+    });
     if (ordersError) throw ordersError;
 
     const ordersMap = new Map<string, OrderData>();
@@ -113,7 +120,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(rows, { status: 200 });
 
   } catch (e: any) {
-    console.error(`Error en API de sales-report: ${e.message}`);
+    if (isSupabaseTransientError(e)) {
+      console.error('Error transitorio en sales-report:', e);
+      return NextResponse.json(
+        { error: 'Supabase no respondió a tiempo. Intenta nuevamente.' },
+        { status: 503 }
+      );
+    }
+    console.error(`Error en API de sales-report: ${e?.message || e}`);
     return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
   }
 }

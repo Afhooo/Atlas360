@@ -1,6 +1,7 @@
 // src/app/coordinadores/page.tsx
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 type Me = { ok: boolean; role?: string; full_name?: string };
@@ -40,9 +41,9 @@ export default function CoordinadoresHome() {
             <h1 className="text-3xl font-bold">FENIX — Coordinación</h1>
             <p className="text-white/60 text-sm">Panel de acciones rápidas del coordinador</p>
           </div>
-          <a href="/" className="text-sm text-gray-300 hover:text-white border border-white/10 bg-white/5 px-3 py-1.5 rounded-lg">
+          <Link href="/" className="text-sm text-gray-300 hover:text-white border border-white/10 bg-white/5 px-3 py-1.5 rounded-lg">
             ← Ir al inicio
-          </a>
+          </Link>
         </header>
 
         {/* guard */}
@@ -100,7 +101,7 @@ export default function CoordinadoresHome() {
 
 function Tile({ href, title, desc, kbd }: { href: string; title: string; desc: string; kbd?: string }) {
   return (
-    <a
+    <Link
       href={href}
       className="block relative rounded-xl border border-white/10 bg-white/5 hover:bg-white/8 transition p-6 cursor-pointer pointer-events-auto focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
     >
@@ -114,6 +115,6 @@ function Tile({ href, title, desc, kbd }: { href: string; title: string; desc: s
       </div>
       <p className="text-sm text-white/70">{desc}</p>
       <div className="mt-4 text-cyan-300 text-sm font-medium">Abrir →</div>
-    </a>
+    </Link>
   );
 }

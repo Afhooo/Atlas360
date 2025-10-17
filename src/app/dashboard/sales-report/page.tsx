@@ -1,18 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LabelList
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, 
+  Tooltip, ResponsiveContainer
 } from 'recharts';
-import { motion, AnimatePresence } from 'framer-motion';
-import * as XLSX from 'xlsx';
+import { motion } from 'framer-motion';
 import { 
-  TrendingUp, TrendingDown, DollarSign, Package, ShoppingCart, 
-  BarChart3, Download, Calendar, Filter, Users, Target, 
-  ArrowUpRight, ArrowDownRight, Eye, Zap, Award, Clock,
-  PieChart as PieChartIcon, Activity, Briefcase, Star,
-  ImageIcon, CreditCard, X as XIcon, Search, Sparkles, CheckSquare
+  TrendingUp, DollarSign, Package, 
+  BarChart3, ArrowUpRight, ArrowDownRight, Activity, Briefcase, X as XIcon
 } from 'lucide-react';
 
 // === TIPOS Y DATOS ===
@@ -64,11 +60,6 @@ const APPLE_COLORS = {
   blue: '#3b82f6', green: '#22c55e', orange: '#f97316', purple: '#8b5cf6',
   red: '#ef4444', teal: '#14b8a6', yellow: '#eab308', pink: '#ec4899',
 };
-
-const CHART_COLORS = [
-  APPLE_COLORS.blue, APPLE_COLORS.green, APPLE_COLORS.orange, APPLE_COLORS.purple,
-  APPLE_COLORS.teal, APPLE_COLORS.red, APPLE_COLORS.yellow, APPLE_COLORS.pink,
-];
 
 // === UTILIDADES DE FECHA ===
 const getDateRange = (period: PeriodOption): [Date, Date] => {

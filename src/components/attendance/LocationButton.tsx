@@ -18,7 +18,7 @@ export default function LocationButton({ onOk }: { onOk: (loc: GeoResult) => voi
         setLoading(false);
         onOk(loc);
       },
-      e => {
+      _error => {
         setErr('Activa GPS y concede permisos de ubicación.');
         setLoading(false);
       },

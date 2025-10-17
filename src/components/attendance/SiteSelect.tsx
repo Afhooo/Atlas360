@@ -37,7 +37,7 @@ export default function SiteSelect({
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || 'sites_fetch_failed');
         if (alive) setSites(Array.isArray(json.data) ? json.data : []);
-      } catch (e:any) {
+      } catch {
         if (alive) { setErr('No se pudieron cargar sucursales.'); setSites([]); }
       } finally {
         if (alive) setLoading(false);

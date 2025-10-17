@@ -1,28 +1,22 @@
 'use client';
 
-import React from 'react';
+import { useEffect } from 'react';
+import { Inter } from 'next/font/google';
 
-// Este componente se encarga únicamente de la lógica de precarga de fuentes,
-// que necesita ejecutarse en el cliente debido al evento onLoad.
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  display: 'swap',
+});
+
+// Vincula la fuente globalmente aprovechando next/font en vez de enlaces manuales.
 export function FontPreloader() {
-  return (
-    <>
-      <link
-        rel="preload"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-        as="style"
-        onLoad={(e) => {
-          const target = e.target as HTMLLinkElement;
-          target.onload = null;
-          target.rel = 'stylesheet';
-        }}
-      />
-      <noscript>
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-        />
-      </noscript>
-    </>
-  );
+  useEffect(() => {
+    document.body.classList.add(inter.className);
+    return () => {
+      document.body.classList.remove(inter.className);
+    };
+  }, []);
+
+  return null;
 }

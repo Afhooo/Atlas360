@@ -1,15 +1,16 @@
 'use client';
 
+import Image from 'next/image';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer
+  Tooltip, ResponsiveContainer
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import {
   TrendingDown, DollarSign, Package, BarChart3, Download, Filter,
-  Eye, Zap, Search, CornerDownLeft, MessageSquareWarning,
+  Zap, Search, CornerDownLeft, MessageSquareWarning,
   CreditCard, X as XIcon
 } from 'lucide-react';
 
@@ -42,7 +43,13 @@ const ImageModal = ({ src, onClose }: { src: string | null; onClose: () => void 
         onClick={(e) => e.stopPropagation()}
         initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
       >
-        <img src={src} alt="Vista ampliada" className="max-w-full max-h-[86vh] object-contain rounded" />
+        <Image
+          src={src}
+          alt="Vista ampliada"
+          width={1200}
+          height={800}
+          className="max-w-full max-h-[86vh] object-contain rounded"
+        />
         <button
           onClick={onClose}
           className="absolute -top-3 -right-3 bg-white/20 backdrop-blur-sm border border-white/30 rounded-full p-2 shadow-lg hover:bg-white/30 transition-colors text-white"

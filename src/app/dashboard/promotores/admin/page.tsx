@@ -6,7 +6,7 @@ import {
   Calendar, Search, Filter, TrendingUp, Users, 
   ShoppingCart, DollarSign, MapPin, BarChart3,
   RefreshCw, Download, Eye, ChevronDown, ChevronUp,
-  Package, Target, Award, Zap
+  Package, Target, Award
 } from 'lucide-react';
 
 /* =========================================================================
@@ -251,7 +251,7 @@ export default function PromotoresResumenPage() {
   const [selectedPromoter, setSelectedPromoter] = useState('');
   const [selectedOrigin, setSelectedOrigin] = useState('');
   const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState<SummaryResp['rows']>([]);
+  const [, setSummary] = useState<SummaryResp['rows']>([]);
   const [rows, setRows] = useState<SalesRow[]>([]);
   const [showDetails, setShowDetails] = useState(false);
 
