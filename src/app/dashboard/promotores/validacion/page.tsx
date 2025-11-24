@@ -34,12 +34,13 @@ type MeResp = {
 
 const fetcher = (u: string) => fetch(u, { cache: 'no-store' }).then((r) => r.json());
 const iso = (d: Date) => d.toISOString().slice(0, 10);
-const startOfMonth = (d = new Date()) => new Date(d.getFullYear(), d.getMonth(), 1);
+const startOfYear = () => new Date(new Date().getFullYear(), 0, 1);
+const endOfYear = () => new Date(new Date().getFullYear(), 11, 31);
 const fmtBs = (n: number) => `Bs ${n.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ValidacionVentasPromotores() {
-  const [from, setFrom] = useState(iso(startOfMonth()));
-  const [to, setTo] = useState(iso(new Date()));
+  const [from, setFrom] = useState(iso(startOfYear())); // cubre todo el año (ej. octubre)
+  const [to, setTo] = useState(iso(endOfYear()));
   const [q, setQ] = useState('');
   const [origin, setOrigin] = useState('');
   const [noteById, setNoteById] = useState<Record<string, string>>({});
