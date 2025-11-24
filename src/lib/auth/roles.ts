@@ -7,9 +7,10 @@
     DASH: '/dashboard',
   
     // Reportes / análisis
-    SALES_REPORT: '/dashboard/sales-report',
-    REPORTE_VENDEDORES: '/dashboard/vendedores',
-    REPORTE_PROMOTORES: '/dashboard/promotores/admin',
+   SALES_REPORT: '/dashboard/sales-report',
+   REPORTE_VENDEDORES: '/dashboard/vendedores',
+   REPORTE_PROMOTORES: '/dashboard/promotores/admin',
+    VALIDACION_PROMOTORES: '/dashboard/promotores/validacion',
     ASISTENCIA_PANEL: '/dashboard/admin/resumen',
   
     // Operación
@@ -42,6 +43,7 @@
     | 'view:sales-report'
     | 'view:resumen-asesores'
     | 'view:resumen-promotores'
+    | 'view:validacion-promotores'
     | 'view:reporte-asistencia'
     | 'view:logistica'
     | 'view:inventario'
@@ -60,7 +62,7 @@
     admin: [
       'view:kpis','view:sales-report','view:resumen-asesores','view:resumen-promotores','view:reporte-asistencia',
       'view:logistica','view:inventario','view:registro-asesores','view:registro-promotores','view:devoluciones','view:asistencia',
-      'view:playbook','view:users-admin','view:mi-resumen'
+      'view:playbook','view:users-admin','view:mi-resumen','view:validacion-promotores'
     ],
     coordinador: [
       'view:kpis','view:logistica','view:inventario','view:asistencia','view:reporte-asistencia','view:resumen-asesores','view:playbook'
@@ -124,6 +126,7 @@
         { pattern: /^\/dashboard\/sales-report(?:\/.*)?$/, cap: 'view:sales-report' },
         { pattern: /^\/dashboard\/vendedores(?:\/.*)?$/, cap: 'view:resumen-asesores' },
         { pattern: /^\/dashboard\/promotores(?:\/.*)?$/, cap: 'view:resumen-promotores' },
+        { pattern: /^\/dashboard\/promotores\/validacion(?:\/.*)?$/, cap: 'view:validacion-promotores' },
         { pattern: /^\/dashboard\/admin\/resumen(?:\/.*)?$/, cap: 'view:reporte-asistencia' },
         { pattern: /^\/logistica(?:\/.*)?$/, cap: 'view:logistica' },
         { pattern: /^\/dashboard\/asesores\/registro(?:\/.*)?$/, cap: 'view:registro-asesores' },

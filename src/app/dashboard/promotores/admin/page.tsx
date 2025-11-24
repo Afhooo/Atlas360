@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, Search, Filter, TrendingUp, Users, 
   ShoppingCart, DollarSign, MapPin, BarChart3,
   RefreshCw, Download, Eye, ChevronDown, ChevronUp,
-  Package, Target, Award
+  Package, Target, Award, CheckCircle, UserPlus
 } from 'lucide-react';
+import { ROUTES } from '@/lib/auth/roles';
 
 /* =========================================================================
    Helpers
@@ -61,6 +63,11 @@ type SalesRow = {
   customer_phone: string | null;
   warehouse_origin?: string | null;
   district?: string | null;
+  approval_status?: string | null;
+  approval_ticket?: string | null;
+  approval_note?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
 };
 
 type SummaryResp = {
@@ -258,8 +265,8 @@ export default function PromotoresResumenPage() {
   const load = async () => {
     setLoading(true);
 
-    const qs = new URLSearchParams({ from, to });
-    const qs2 = new URLSearchParams({ from, to, q });
+    const qs = new URLSearchParams({ from, to, status: 'approved' });
+    const qs2 = new URLSearchParams({ from, to, q, status: 'approved' });
 
     const [r1, r2] = await Promise.allSettled([
       fetch(`/endpoints/promoters/summary?${qs.toString()}`, { cache: 'no-store' }),
@@ -445,15 +452,25 @@ export default function PromotoresResumenPage() {
         animate={{ opacity: 1, y: 0 }}
         className="glass-card mb-8"
       >
-        <div className="flex items-center gap-4">
-          <div className="p-4 bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 border border-apple-blue-500/30 rounded-apple-lg">
-            <BarChart3 size={28} className="text-apple-blue-400" />
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-4 bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 border border-apple-blue-500/30 rounded-apple-lg">
+              <BarChart3 size={28} className="text-apple-blue-400" />
+            </div>
+            <div>
+              <h1 className="apple-h1 mb-2">Dashboard de Promotores</h1>
+              <p className="apple-body text-apple-gray-300">
+                Análisis detallado de ventas y rendimiento por promotor
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="apple-h1 mb-2">Dashboard de Promotores</h1>
-            <p className="apple-body text-apple-gray-300">
-              Análisis detallado de ventas y rendimiento por promotor
-            </p>
+          <div className="flex items-center gap-3">
+            <Link href={ROUTES.VALIDACION_PROMOTORES} className="btn-primary btn-sm flex items-center gap-2">
+              <CheckCircle size={16} /> Validar ventas
+            </Link>
+            <Link href={ROUTES.REGISTRO_PROMOTORES} className="btn-secondary btn-sm flex items-center gap-2">
+              <UserPlus size={16} /> Registrar venta
+            </Link>
           </div>
         </div>
       </motion.header>

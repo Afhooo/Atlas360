@@ -166,7 +166,19 @@ export default function SalesEntry() {
   // Acciones
   // ==================
   const addLine = () => {
+    const cleanedDistrict = district.trim();
     if (!productName || quantity <= 0 || unitPrice <= 0) return;
+    if (!cleanedDistrict) {
+      alert('Agrega distrito/zona antes de registrar la línea.');
+      return;
+    }
+    const phone = dbPhoneOrNull(customerPhone);
+    if (customerPhone && !phone) {
+      alert('Número de teléfono inválido. Usa solo dígitos, con o sin +.');
+      return;
+    }
+    const cleanedWarehouse = cleanWarehouse(warehouse);
+
     setLines((prev) => [
       ...prev,
       {
@@ -175,10 +187,10 @@ export default function SalesEntry() {
         quantity,
         unit_price: unitPrice,
         customer_name: customerName || null,
-        customer_phone: customerPhone || null,
+        customer_phone: phone,
         notes: notes || null,
-        warehouse_origin: warehouse || null,
-        district: district || null,
+        warehouse_origin: cleanedWarehouse,
+        district: cleanedDistrict,
       },
     ]);
     setProductName('');
@@ -187,7 +199,6 @@ export default function SalesEntry() {
     setCustomerName('');
     setCustomerPhone('');
     setNotes('');
-    setDistrict('');
     setQuery('');
     setResults([]);
   };
@@ -198,32 +209,56 @@ export default function SalesEntry() {
 
   const saveAll = async () => {
     if (lines.length === 0) return;
+    if (!me?.ok) {
+      alert('Sesión no disponible. Vuelve a iniciar sesión.');
+      return;
+    }
+
+    const missingDistrict = lines.some((l) => !l.district || !l.district.trim());
+    if (missingDistrict) {
+      alert('Cada línea debe tener distrito/zona.');
+      return;
+    }
+
     setSaving(true);
 
-    const payload = lines.map((l) => ({
-      promoter_name: promoterName,
-      sale_date: saleDate,
-      origin,
-      product_id: l.product_id, // sigue null
-      product_name: l.product_name,
-      quantity: l.quantity,
-      unit_price: l.unit_price,
-      customer_name: l.customer_name ?? null,
-      customer_phone: dbPhoneOrNull(l.customer_phone),
-      notes: l.notes ?? null,
-      warehouse_origin: cleanWarehouse(l.warehouse_origin),
-      district: l.district ?? null,
-    }));
+    try {
+      const payload = {
+        promoterName: promoterName || me.full_name || 'Promotor',
+        promoterPersonId: me.person_pk ?? null,
+        saleDate,
+        lines: lines.map((l) => ({
+          origin,
+          warehouseOrigin: cleanWarehouse(l.warehouse_origin),
+          district: l.district?.trim() || null,
+          productId: l.product_id,
+          productName: l.product_name,
+          quantity: l.quantity,
+          unitPrice: l.unit_price,
+          customerName: l.customer_name || undefined,
+          customerPhone: dbPhoneOrNull(l.customer_phone) || undefined,
+          notes: l.notes || undefined,
+        })),
+      };
 
-    const { error } = await supabase.from('promoter_sales').insert(payload);
+      const resp = await fetch('/endpoints/promoters/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await resp.json().catch(() => ({}));
 
-    if (error) {
-      alert('Error al guardar: ' + error.message);
-    } else {
+      if (!resp.ok || json?.error) {
+        throw new Error(json?.error || 'No se pudo guardar el registro');
+      }
+
       setLines([]);
       alert('✅ Ventas registradas con éxito.');
+    } catch (err: any) {
+      alert('Error al guardar: ' + (err?.message || 'Error desconocido'));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   // ==================
@@ -457,12 +492,12 @@ export default function SalesEntry() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-white/70">Distrito / Zona</label>
+                  <label className="block text-sm font-semibold text-white/70">Distrito / Zona (requerido)</label>
                   <input
                     type="text"
                     value={district}
                     onChange={(e) => setDistrict(e.target.value)}
-                    placeholder="Ubicación de entrega (opcional)"
+                    placeholder="Ubicación de entrega"
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50"
                   />
                 </div>

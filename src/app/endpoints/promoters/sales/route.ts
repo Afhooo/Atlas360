@@ -31,9 +31,12 @@ type Line = {
 
 type Payload = {
   promoterName: string
+  promoterPersonId?: string | null
   saleDate: string   // YYYY-MM-DD o DD/MM/YYYY (se normaliza abajo)
   lines: Line[]
 }
+
+type ApprovalStatus = 'approved' | 'pending' | 'rejected' | 'all'
 
 /* =========================
    Helpers de normalización
@@ -104,6 +107,7 @@ export async function POST(req: Request) {
 
       return {
         promoter_name: body.promoterName.trim(),
+        promoter_person_id: body.promoterPersonId?.trim() || null,
         sale_date: saleDateISO,
         origin: l.origin,
         warehouse_origin: l.origin === 'encomienda' ? (l.warehouseOrigin as string) : null,
@@ -115,6 +119,11 @@ export async function POST(req: Request) {
         customer_name: l.customerName?.trim() || null,
         customer_phone: l.customerPhone?.trim() || null,
         notes: l.notes?.trim() || null,
+        approval_status: 'pending',
+        approval_ticket: null,
+        approval_note: null,
+        approved_by: null,
+        approved_at: null,
       }
     })
 
@@ -123,6 +132,13 @@ export async function POST(req: Request) {
       console.error('[promoters/sales] supabase error', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    console.info('[promoters/sales] inserted', {
+      promoter: body.promoterName,
+      personId: body.promoterPersonId || null,
+      saleDate: saleDateISO,
+      rows: rows.length,
+    })
 
     return NextResponse.json({ ok: true, inserted: rows.length }, { status: 201 })
   } catch (err: any) {
@@ -139,10 +155,15 @@ export async function GET(req: Request) {
     const rawFrom = (searchParams.get('from') || '').trim()
     const rawTo   = (searchParams.get('to')   || '').trim()
     const q       = (searchParams.get('q')    || '').trim()
+    const rawStatus = (searchParams.get('status') || '').trim().toLowerCase() as ApprovalStatus
 
     const range = (!rawFrom || !rawTo)
       ? last30()
       : { from: asISODate(rawFrom), to: asISODate(rawTo) }
+
+    const status: ApprovalStatus = ['approved','pending','rejected','all'].includes(rawStatus)
+      ? rawStatus
+      : 'approved'
 
     let query = supabase
       .from('promoter_sales')
@@ -150,6 +171,10 @@ export async function GET(req: Request) {
       .gte('sale_date', range.from)
       .lte('sale_date', range.to)
       .order('sale_date', { ascending: true })
+
+    if (status !== 'all') {
+      query = query.eq('approval_status', status)
+    }
 
     if (q) {
       query = query.or(

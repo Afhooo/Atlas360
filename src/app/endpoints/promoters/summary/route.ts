@@ -1,8 +1,7 @@
 // /src/app/endpoints/promoters/summary/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { withSupabaseRetry, isSupabaseTransientError } from '@/lib/supabase';
-import type { PostgrestResponse } from '@supabase/supabase-js';
+import { isSupabaseTransientError } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,6 +27,8 @@ type SummaryRow = {
   tienda: number | null;
 };
 
+type OriginKey = 'cochabamba' | 'lapaz' | 'elalto' | 'santacruz' | 'sucre' | 'encomienda' | 'tienda';
+
 function asISODate(input?: string): string {
   // Acepta "DD/MM/YYYY" o "YYYY-MM-DD"
   if (!input) return '';
@@ -52,38 +53,73 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const rawFrom = url.searchParams.get('from') || '';
     const rawTo = url.searchParams.get('to') || '';
+    const rawStatus = (url.searchParams.get('status') || '').toLowerCase();
 
     const range = (!rawFrom || !rawTo)
       ? last30()
       : { from: asISODate(rawFrom), to: asISODate(rawTo) };
 
-    // Devolver PROMESA tipada desde el callback (no builder)
-    const resp: PostgrestResponse<SummaryRow> = await withSupabaseRetry(
-      async (): Promise<PostgrestResponse<SummaryRow>> => {
-        const r = await supabase
-          .from('promoter_sales_daily_summary')
-          .select(
-            // bypass del parser de columnas por seguridad en vistas
-            'sale_date,promoter_name,items,total_bs,cochabamba,lapaz,elalto,santacruz,sucre,encomienda,tienda' as any
-          )
-          .gte('sale_date', range.from)
-          .lte('sale_date', range.to)
-          .order('sale_date', { ascending: true });
+    const status: 'approved' | 'pending' | 'rejected' | 'all' =
+      ['approved', 'pending', 'rejected', 'all'].includes(rawStatus) ? (rawStatus as any) : 'approved';
 
-        return r as PostgrestResponse<SummaryRow>;
-      }
-    );
+    let query = supabase
+      .from('promoter_sales')
+      .select('sale_date,promoter_name,origin,quantity,unit_price,approval_status')
+      .gte('sale_date', range.from)
+      .lte('sale_date', range.to);
 
-    const { data, error } = resp;
+    if (status !== 'all') {
+      query = query.eq('approval_status', status);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({
-      range,
-      rows: (data ?? []) as SummaryRow[],
-    }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+    const rows: SummaryRow[] = [];
+    const byKey: Record<string, SummaryRow> = {};
+
+    for (const r of data || []) {
+      const key = `${r.sale_date}-${r.promoter_name || '—'}`;
+      if (!byKey[key]) {
+        byKey[key] = {
+          sale_date: r.sale_date,
+          promoter_name: r.promoter_name || '—',
+          items: 0,
+          total_bs: 0,
+          cochabamba: 0,
+          lapaz: 0,
+          elalto: 0,
+          santacruz: 0,
+          sucre: 0,
+          encomienda: 0,
+          tienda: 0,
+        };
+      }
+      const itemQty = Number(r.quantity || 0);
+      const itemTotal = itemQty * Number(r.unit_price || 0);
+
+      byKey[key].items = (byKey[key].items || 0) + itemQty;
+      byKey[key].total_bs = (byKey[key].total_bs || 0) + itemTotal;
+      if (r.origin && byKey[key][r.origin as keyof SummaryRow] !== undefined) {
+        const originKey = r.origin as OriginKey;
+        const current = Number(byKey[key][originKey] || 0);
+        byKey[key][originKey] = current + itemTotal;
+      }
+    }
+
+    for (const row of Object.values(byKey)) {
+      rows.push(row);
+    }
+
+    rows.sort((a, b) => a.sale_date.localeCompare(b.sale_date));
+
+    return NextResponse.json(
+      { range, rows },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } }
+    );
 
   } catch (e: any) {
     if (isSupabaseTransientError(e)) {

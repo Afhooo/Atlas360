@@ -1,8 +1,17 @@
 -- supabase/migrations/20250225194500_create_inventory_tables.sql
 -- Esquema inicial para el módulo de inventario
 
-create type public.inventory_movement_type as enum ('adjustment', 'transfer');
-create type public.inventory_movement_status as enum ('pending', 'in_transit', 'completed', 'cancelled');
+-- Tipos idempotentes (solo se crean si no existen)
+do $$
+begin
+  if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace where t.typname = 'inventory_movement_type' and n.nspname = 'public') then
+    create type public.inventory_movement_type as enum ('adjustment', 'transfer');
+  end if;
+
+  if not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace where t.typname = 'inventory_movement_status' and n.nspname = 'public') then
+    create type public.inventory_movement_status as enum ('pending', 'in_transit', 'completed', 'cancelled');
+  end if;
+end $$;
 
 create table if not exists public.inventory_products (
   id uuid primary key default gen_random_uuid(),
@@ -52,4 +61,3 @@ create index if not exists inventory_movements_status_idx
 comment on table public.inventory_products is 'Catálogo de productos controlados en inventario';
 comment on table public.inventory_stock is 'Stock actual por producto y sucursal';
 comment on table public.inventory_movements is 'Historial de movimientos y ajustes de inventario';
-

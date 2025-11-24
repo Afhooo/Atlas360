@@ -1,7 +1,9 @@
 // src/app/endpoints/users/[id]/route.ts
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type PostgrestError } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
+import { LoginIndexSupport, runWithLoginIndexFallback, type LoginIndexValues } from '@/lib/auth/login-index-support';
+import { buildLoginIndexes } from '@/lib/auth/login-normalize';
 
 function getAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,6 +18,47 @@ const errorMessage = (err: unknown, fallback: string) => {
   if (err instanceof Error && err.message) return err.message;
   if (typeof err === 'string' && err.trim()) return err;
   return fallback;
+};
+
+const PEOPLE_SITE_CHECK = 'people_site_required_except_promotor';
+const PEOPLE_ROLE_CHECK = 'people_role_check';
+const ALLOWED_ROLES = ['ADMIN', 'GERENCIA', 'COORDINADOR', 'LIDER', 'ASESOR', 'PROMOTOR', 'LOGISTICA'] as const;
+const loginIndexSupport = new LoginIndexSupport();
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUUID = (value?: string | null) => Boolean(value && UUID_REGEX.test(value));
+
+const normalizeBranchPayload = (input: Record<string, unknown>) => {
+  const explicitSite = typeof input.site_id === 'string' ? input.site_id.trim() : null;
+  const rawBranch = typeof input.branch_id === 'string' ? input.branch_id.trim() : null;
+  const branchLabel = typeof input.branch_label === 'string' ? input.branch_label.trim() : null;
+  const legacyLocal = typeof input.local === 'string' ? input.local.trim() : null;
+
+  let site_id: string | null = explicitSite || null;
+  if (!site_id && rawBranch && isUUID(rawBranch)) {
+    site_id = rawBranch;
+  }
+
+  let local: string | null = null;
+  if (branchLabel) {
+    local = branchLabel;
+  } else if (!site_id && rawBranch) {
+    local = rawBranch;
+  } else if (legacyLocal) {
+    local = legacyLocal;
+  }
+
+  return { site_id, local };
+};
+
+const mapPeopleConstraintMessage = (error: PostgrestError) => {
+  if (error.code === '23514' && error.message?.includes(PEOPLE_SITE_CHECK)) {
+    return 'Sucursal es obligatoria para roles distintos de PROMOTOR. Selecciona una sucursal o usa el rol PROMOTOR.';
+  }
+  if (error.code === '23514' && error.message?.includes(PEOPLE_ROLE_CHECK)) {
+    return `Rol inválido. Usa uno de: ${ALLOWED_ROLES.join(', ')}.`;
+  }
+  return null;
 };
 
 /* ========== GET /endpoints/users/:id ========== */
@@ -59,19 +102,38 @@ export async function PATCH(
 
     // Solo campos que existen en "people"
     const payload: Record<string, unknown> = {};
+    const loginIndexValues: LoginIndexValues = {};
 
     if (typeof body.full_name === 'string') {
       payload.full_name = body.full_name;
     }
 
+    if (typeof body.username === 'string') {
+      const username = body.username.trim().toLowerCase();
+      if (username) {
+        const usernameIndexes = buildLoginIndexes(username);
+        payload.username = username;
+        loginIndexValues.username_norm = usernameIndexes.norm;
+        loginIndexValues.username_flat = usernameIndexes.flat;
+      }
+    }
+
     if (typeof body.email === 'string') {
-      payload.email = body.email.toLowerCase();
+      const email = body.email.trim().toLowerCase();
+      payload.email = email;
+      if (email) {
+        const emailIndexes = buildLoginIndexes(email);
+        loginIndexValues.email_norm = emailIndexes.norm;
+        loginIndexValues.email_flat = emailIndexes.flat;
+      }
     }
 
     // role / fenix_role
     const fenixRoleRaw = body.fenix_role ?? body.role;
     if (typeof fenixRoleRaw === 'string' && fenixRoleRaw.trim()) {
-      payload.fenix_role = fenixRoleRaw.toUpperCase();
+      const normalizedRole = fenixRoleRaw.toUpperCase();
+      payload.fenix_role = normalizedRole;
+      payload.role = normalizedRole; // sincroniza con columna legacy requerida
     }
 
     // privilege_level (solo si es número finito)
@@ -84,10 +146,10 @@ export async function PATCH(
       payload.active = body.active;
     }
 
-    if (body.branch_id !== undefined || body.local !== undefined) {
-      const raw = body.branch_id ?? body.local;
-      const normalized = typeof raw === 'string' ? raw.trim() : raw;
-      payload.local = normalized ? String(normalized) : null;
+    if ('branch_id' in body || 'branch_label' in body || 'site_id' in body || 'local' in body) {
+      const { site_id, local } = normalizeBranchPayload(body);
+      payload.site_id = site_id ?? null;
+      payload.local = local ?? null;
     }
 
     if (body.phone !== undefined) {
@@ -105,14 +167,25 @@ export async function PATCH(
       return NextResponse.json({ ok: true, data: null });
     }
 
-    const { data, error } = await supabase
-      .from('people')
-      .update(payload)
-      .eq('id', id)
-      .select('*')
-      .single();
+    const { data, error } = await runWithLoginIndexFallback(
+      loginIndexSupport,
+      payload,
+      loginIndexValues,
+      async (finalPayload) =>
+        await supabase
+          .from('people')
+          .update(finalPayload)
+          .eq('id', id)
+          .select('*')
+          .single(),
+      (column) => console.warn(`[users] people.${column} no existe. Reintentando sin ese campo.`)
+    );
 
-    if (error) throw error;
+    if (error) {
+      const friendly = mapPeopleConstraintMessage(error as PostgrestError);
+      if (friendly) throw new Error(friendly);
+      throw error;
+    }
     return NextResponse.json({ ok: true, data });
   } catch (err) {
     console.error('PATCH /users/:id error:', err);

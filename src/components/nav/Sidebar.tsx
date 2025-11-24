@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, BarChart3, Users, UserPlus, Package,
-  RotateCcw, Calendar, FileText, Settings,
+  RotateCcw, Calendar, FileText, Settings, CheckCircle2,
   LogOut, ChevronRight, Sparkles, Activity, ShieldCheck
 } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
@@ -173,6 +173,7 @@ export const Sidebar: FC<SidebarProps> = ({
         { href: ROUTES.INVENTARIO, icon: <Package size={18} />, label: 'Inventario', shortcut: 'I', req: 'view:inventario' },
         { href: ROUTES.REGISTRO_ASESORES, icon: <UserPlus size={18} />, label: 'Registro asesores', shortcut: '6', req: 'view:registro-asesores' },
         { href: ROUTES.REGISTRO_PROMOTORES, icon: <UserPlus size={18} />, label: 'Registro promotores', req: 'view:registro-promotores' },
+        { href: ROUTES.VALIDACION_PROMOTORES, icon: <CheckCircle2 size={18} />, label: 'Validación promotores', req: 'view:validacion-promotores' },
         { href: ROUTES.DEVOLUCIONES, icon: <RotateCcw size={18} />, label: 'Devoluciones', shortcut: '4', req: 'view:devoluciones' },
         { href: ROUTES.ASISTENCIA, icon: <Calendar size={18} />, label: 'Marcar asistencia', shortcut: 'A', req: 'view:asistencia' },
         { href: ROUTES.MI_RESUMEN, icon: <FileText size={18} />, label: 'Mi resumen', req: 'view:mi-resumen' },

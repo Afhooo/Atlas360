@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import {
@@ -20,6 +20,7 @@ import {
   Pencil,
   Trash2,
   UserPlus,
+  Car,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
@@ -41,6 +42,8 @@ type UserRow = {
   active: boolean;
   created_at: string;
   branch_id: string | null;
+  site_id: string | null;
+  site_name: string | null;
   phone: string | null;
   vehicle_type: string | null;
   initial_password_plain_text?: string | null;
@@ -63,6 +66,15 @@ type BaseResponse = {
 type Site = {
   id: string;
   name: string;
+};
+
+type BranchOption = {
+  key: string;
+  value: string;
+  filterValue: string;
+  label: string;
+  source: 'site' | 'people' | 'manual';
+  kind: 'site' | 'legacy';
 };
 
 /* ==========================================================================
@@ -88,6 +100,7 @@ const STATUS_OPTIONS = [
 ];
 
 const NO_BRANCH_OPTION = '__none__';
+const SITE_FILTER_PREFIX = 'site:';
 
 const fetcher = async (url: string): Promise<UsersResponse> => {
   const res = await fetch(url, { cache: 'no-store' });
@@ -131,6 +144,8 @@ const randomPassword = (length = 10) => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789$%*!@#';
   return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 };
+
+const getUserBranchLabel = (user: UserRow) => user.site_name || user.branch_id || 'Sin sucursal';
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   if (err instanceof Error && err.message) return err.message;
@@ -182,6 +197,22 @@ const LoadingState = () => (
   </div>
 );
 
+type DetailTileProps = {
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+};
+
+const DetailTile = ({ icon, label, children }: DetailTileProps) => (
+  <div className="rounded-apple border border-white/5 bg-white/[0.02] p-3 text-white/90">
+    <div className="apple-caption flex items-center gap-2 text-apple-gray-400">
+      {icon}
+      {label}
+    </div>
+    <div className="apple-body mt-1 text-white">{children}</div>
+  </div>
+);
+
 /* ==========================================================================
    Página principal
    ========================================================================= */
@@ -213,18 +244,10 @@ export default function AdminUsuariosPage() {
     { keepPreviousData: true }
   );
 
-  const { data: sites } = useSWR<Site[]>('/endpoints/sites', fetchSites);
-  const branchOptions = useMemo(() => {
-    const list = new Set<string>();
-    (sites ?? []).forEach((site) => {
-      const name = site?.name?.trim();
-      if (name) list.add(name);
-    });
-    return Array.from(list).sort((a, b) => a.localeCompare(b));
-  }, [sites]);
-
   const total = data?.total ?? 0;
-  const rows = data?.data ?? [];
+  const rows = useMemo(() => data?.data ?? [], [data]);
+  const pageActive = rows.filter((user) => user.active).length;
+  const pageInactive = Math.max(0, rows.length - pageActive);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   useEffect(() => {
@@ -241,6 +264,9 @@ export default function AdminUsuariosPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createdUser, setCreatedUser] = useState<UserRow | null>(null);
+  const [showCreateAdvanced, setShowCreateAdvanced] = useState(false);
+  const [createAttempted, setCreateAttempted] = useState(false);
+  const [customBranchMode, setCustomBranchMode] = useState(false);
   const [createForm, setCreateForm] = useState({
     full_name: '',
     fenix_role: 'ASESOR',
@@ -248,6 +274,7 @@ export default function AdminUsuariosPage() {
     username: '',
     privilege_level: 1,
     branch_id: '',
+    branch_label: '',
     phone: '',
     vehicle_type: '',
     password: '',
@@ -260,11 +287,13 @@ export default function AdminUsuariosPage() {
     fenix_role: 'ASESOR',
     privilege_level: 1,
     branch_id: '',
+    branch_label: '',
     phone: '',
     vehicle_type: '',
     active: true,
   });
   const [editLoading, setEditLoading] = useState(false);
+  const [editCustomBranchMode, setEditCustomBranchMode] = useState(false);
 
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [resetPassword, setResetPassword] = useState('');
@@ -273,16 +302,144 @@ export default function AdminUsuariosPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const branchIsRequired = createForm.fenix_role !== 'PROMOTOR';
+  const branchHasError = branchIsRequired && !createForm.branch_id.trim() && createAttempted;
+
+  const { data: sites } = useSWR<Site[]>('/endpoints/sites', fetchSites);
+  const branchOptions = useMemo<BranchOption[]>(() => {
+    const map = new Map<string, BranchOption>();
+
+    const addSiteOption = (
+      value?: string | null,
+      label?: string | null,
+      source: BranchOption['source'] = 'site'
+    ) => {
+      const trimmed = value?.trim();
+      if (!trimmed) return;
+      const key = `${SITE_FILTER_PREFIX}${trimmed}`;
+      if (map.has(key)) {
+        const existing = map.get(key)!;
+        if ((!existing.label || existing.label === existing.value) && label?.trim()) {
+          map.set(key, { ...existing, label: label.trim() });
+        }
+        return;
+      }
+      map.set(key, {
+        key,
+        value: trimmed,
+        label: label?.trim() || trimmed,
+        filterValue: `${SITE_FILTER_PREFIX}${trimmed}`,
+        source,
+        kind: 'site',
+      });
+    };
+
+    const addLegacyOption = (
+      value?: string | null,
+      label?: string | null,
+      source: BranchOption['source'] = 'people'
+    ) => {
+      const trimmedValue = value?.trim();
+      if (!trimmedValue) return;
+      const key = `legacy:${trimmedValue.toLowerCase()}`;
+      if (map.has(key)) return;
+      map.set(key, {
+        key,
+        value: trimmedValue,
+        label: label?.trim() || trimmedValue,
+        filterValue: trimmedValue,
+        source,
+        kind: 'legacy',
+      });
+    };
+
+    (sites ?? []).forEach((site) => addSiteOption(site?.id, site?.name, 'site'));
+
+    rows.forEach((user) => {
+      if (user.site_id) {
+        addSiteOption(user.site_id, user.site_name ?? user.branch_id ?? user.site_id, 'people');
+      }
+      if (user.branch_id) {
+        addLegacyOption(user.branch_id, user.branch_id, 'people');
+      }
+    });
+
+    if (createdUser) {
+      const createdLocal =
+        (createdUser as unknown as { local?: string | null })?.local ??
+        createdUser.branch_id ??
+        null;
+
+      if (createdUser.site_id) {
+        addSiteOption(
+          createdUser.site_id,
+          createdUser.site_name ?? createdLocal ?? createdUser.site_id,
+          'people'
+        );
+      } else if (createdLocal) {
+        addLegacyOption(createdLocal, createdLocal, 'people');
+      }
+    }
+
+    if (branchFilter !== 'all' && branchFilter !== NO_BRANCH_OPTION && branchFilter) {
+      if (branchFilter.startsWith(SITE_FILTER_PREFIX)) {
+        const siteId = branchFilter.slice(SITE_FILTER_PREFIX.length);
+        addSiteOption(siteId, siteId, 'manual');
+      } else {
+        addLegacyOption(branchFilter, branchFilter, 'manual');
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, 'es', { sensitivity: 'base' })
+    );
+  }, [rows, sites, createdUser, branchFilter]);
+
+  useEffect(() => {
+    if (!branchOptions.length) {
+      setCustomBranchMode(true);
+    }
+  }, [branchOptions.length]);
+
+  useEffect(() => {
+    if (!branchOptions.length) {
+      setEditCustomBranchMode(true);
+    }
+  }, [branchOptions.length]);
+
+  useEffect(() => {
+    if (!editingUser) {
+      setEditCustomBranchMode(false);
+    }
+  }, [editingUser]);
+
+  const hasCurrentBranchOption = useMemo(
+    () => branchOptions.some((option) => option.value === createForm.branch_id),
+    [branchOptions, createForm.branch_id]
+  );
+
+  const editHasCurrentBranchOption = useMemo(
+    () => branchOptions.some((option) => option.value === editForm.branch_id),
+    [branchOptions, editForm.branch_id]
+  );
 
   const openCreate = () => {
     setCreatedUser(null);
+    setShowCreateAdvanced(false);
+    setCreateAttempted(false);
+    setCustomBranchMode(branchOptions.length === 0);
+    const preferredOption =
+      branchFilter !== 'all' && branchFilter !== NO_BRANCH_OPTION
+        ? branchOptions.find((option) => option.filterValue === branchFilter)
+        : branchOptions[0];
     setCreateForm({
       full_name: '',
       fenix_role: 'ASESOR',
       email: '',
       username: '',
       privilege_level: 1,
-      branch_id: '',
+      branch_id: preferredOption?.value ?? '',
+      branch_label: preferredOption?.label ?? '',
       phone: '',
       vehicle_type: '',
       password: '',
@@ -292,16 +449,20 @@ export default function AdminUsuariosPage() {
 
   const handleCreate = async (evt: React.FormEvent<HTMLFormElement>) => {
     evt.preventDefault();
+    setCreateAttempted(true);
     setCreateLoading(true);
     setCreatedUser(null);
     try {
+      const branchIdValue = createForm.branch_id.trim();
+      const branchLabelValue = createForm.branch_label.trim();
       const payload = {
         full_name: createForm.full_name.trim(),
         fenix_role: createForm.fenix_role.trim(),
         email: createForm.email.trim() || undefined,
         username: createForm.username.trim() || undefined,
         privilege_level: Number(createForm.privilege_level) || 1,
-        branch_id: createForm.branch_id.trim() || null,
+        branch_id: branchIdValue || null,
+        branch_label: branchLabelValue || null,
         phone: createForm.phone.trim() || null,
         vehicle_type: createForm.vehicle_type.trim() || null,
         password: createForm.password.trim() || undefined,
@@ -309,6 +470,11 @@ export default function AdminUsuariosPage() {
 
       if (!payload.full_name) {
         toast.error('El nombre completo es obligatorio');
+        return;
+      }
+
+      if (payload.fenix_role !== 'PROMOTOR' && !payload.branch_id) {
+        toast.error('Selecciona una sucursal para este rol.');
         return;
       }
 
@@ -323,7 +489,17 @@ export default function AdminUsuariosPage() {
         throw new Error(json.error || `Fallo al crear usuario (${res.status})`);
       }
 
-      setCreatedUser(json.data ?? null);
+      const rawCreated = (json.data ?? null) as (UserRow & { local?: string | null }) | null;
+      const normalizedCreated = rawCreated
+        ? ({
+            ...rawCreated,
+            branch_id: rawCreated.branch_id ?? rawCreated.local ?? null,
+            site_id: rawCreated.site_id ?? null,
+            site_name: rawCreated.site_name ?? null,
+          } satisfies UserRow)
+        : null;
+      setCreatedUser(normalizedCreated);
+      setCreateAttempted(false);
       toast.success('Usuario creado correctamente');
       await mutate();
     } catch (err) {
@@ -334,13 +510,18 @@ export default function AdminUsuariosPage() {
   };
 
   const openEdit = (user: UserRow) => {
+    const branchValue = user.site_id ?? user.branch_id ?? '';
+    const branchLabel = user.site_name ?? user.branch_id ?? '';
+    const hasOption = branchOptions.some((option) => option.value === branchValue);
+    setEditCustomBranchMode(branchOptions.length === 0 || (!!branchValue && !hasOption));
     setEditingUser(user);
     setEditForm({
       full_name: user.full_name ?? '',
       email: user.email ?? '',
       fenix_role: (user.fenix_role || 'ASESOR').toUpperCase(),
       privilege_level: user.privilege_level ?? 1,
-      branch_id: user.branch_id ?? '',
+      branch_id: branchValue,
+      branch_label: branchLabel,
       phone: user.phone ?? '',
       vehicle_type: user.vehicle_type ?? '',
       active: user.active,
@@ -352,12 +533,15 @@ export default function AdminUsuariosPage() {
     if (!editingUser) return;
     setEditLoading(true);
     try {
+      const branchIdValue = editForm.branch_id.trim();
+      const branchLabelValue = editForm.branch_label.trim();
       const payload = {
         full_name: editForm.full_name.trim(),
         email: editForm.email.trim(),
         fenix_role: editForm.fenix_role.trim(),
         privilege_level: Number(editForm.privilege_level) || 1,
-        branch_id: editForm.branch_id.trim() || null,
+        branch_id: branchIdValue || null,
+        branch_label: branchLabelValue || null,
         phone: editForm.phone.trim() || null,
         vehicle_type: editForm.vehicle_type.trim() || null,
         active: !!editForm.active,
@@ -482,63 +666,77 @@ export default function AdminUsuariosPage() {
       </header>
 
       <section className="glass-card space-y-4 p-4 sm:p-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row">
-            <label className="relative flex-1">
-              <span className="sr-only">Buscar</span>
-              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-apple-gray-400" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por nombre, email o sucursal"
-                className="pl-9"
-              />
-            </label>
-            <label className="flex-1">
-              <span className="apple-caption text-apple-gray-400 mb-1 block">Rol</span>
-              <select
-                className="input-apple w-full"
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-              >
-                <option value="all">Todos</option>
-                {ROLE_OPTIONS.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex-1">
-              <span className="apple-caption text-apple-gray-400 mb-1 block">Estado</span>
-              <select
-                className="input-apple w-full"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex-1">
-              <span className="apple-caption text-apple-gray-400 mb-1 block">Sucursal</span>
-              <select
-                className="input-apple w-full"
-                value={branchFilter}
-                onChange={(e) => setBranchFilter(e.target.value)}
-              >
-                <option value="all">Todas</option>
-                {branchOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-                <option value={NO_BRANCH_OPTION}>Sin sucursal</option>
-              </select>
-            </label>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="relative md:col-span-2 xl:col-span-2">
+            <span className="sr-only">Buscar</span>
+            <Search
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-apple-gray-400"
+            />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nombre, email o sucursal"
+              className="pl-9"
+            />
+          </label>
+          <label>
+            <span className="apple-caption mb-1 block text-apple-gray-400">Rol</span>
+            <select
+              className="input-apple w-full"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+            >
+              <option value="all">Todos</option>
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="apple-caption mb-1 block text-apple-gray-400">Estado</span>
+            <select
+              className="input-apple w-full"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="apple-caption mb-1 block text-apple-gray-400">Sucursal</span>
+            <select
+              className="input-apple w-full"
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+            >
+              <option value="all">Todas</option>
+              {branchOptions.map((option) => (
+                <option key={`filter-${option.key}`} value={option.filterValue}>
+                  {option.label}
+                </option>
+              ))}
+              <option value={NO_BRANCH_OPTION}>Sin sucursal</option>
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-apple-caption">
+            <span className="rounded-full border border-white/10 px-3 py-1 text-apple-gray-100">
+              {total.toLocaleString('es-BO')} usuarios totales
+            </span>
+            <span className="rounded-full border border-apple-green-400/50 bg-apple-green-500/10 px-3 py-1 text-apple-green-200">
+              Activos en vista: {pageActive}
+            </span>
+            <span className="rounded-full border border-white/10 px-3 py-1 text-apple-gray-300">
+              Inactivos en vista: {pageInactive}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -550,169 +748,146 @@ export default function AdminUsuariosPage() {
               Recargar
             </Button>
             <div className="apple-caption text-apple-gray-400">
-              {total.toLocaleString('es-BO')} usuarios
+              Página {page} de {totalPages}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="glass-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-white/5">
-            <thead>
-              <tr className="text-left text-apple-caption uppercase text-apple-gray-400">
-                <th className="px-6 py-4">Usuario</th>
-                <th className="px-6 py-4">Rol</th>
-                <th className="px-6 py-4">Contacto</th>
-                <th className="px-6 py-4">Sucursal</th>
-                <th className="px-6 py-4">Privilegio</th>
-                <th className="px-6 py-4">Creado</th>
-                <th className="px-6 py-4 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {isLoading && (
-                <tr>
-                  <td colSpan={7}>
-                    <LoadingState />
-                  </td>
-                </tr>
-              )}
-
-              {!isLoading && rows.length === 0 && (
-                <tr>
-                  <td colSpan={7}>
-                    <EmptyState />
-                  </td>
-                </tr>
-              )}
-
-              {!isLoading && rows.map((user) => (
-                <tr key={user.id} className="transition hover:bg-white/5">
-                  <td className="px-6 py-4 align-top">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <p className="apple-body text-white font-semibold">
-                          {user.full_name || 'Sin nombre'}
-                        </p>
-                        <StatusBadge active={user.active} />
-                      </div>
-                      <div className="apple-caption text-apple-gray-400 flex items-center gap-2">
-                        <Shield size={14} />
-                        {user.username || '—'}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <div className="apple-body text-white">{roleLabel(user.fenix_role)}</div>
-                    <div className="apple-caption text-apple-gray-500">
-                      {(user.fenix_role || '').toUpperCase() || '—'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <div className="space-y-1 apple-caption text-apple-gray-300">
-                      <div className="flex items-center gap-2">
-                        <Mail size={14} className="text-apple-gray-500" />
-                        <span>{user.email || '—'}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone size={14} className="text-apple-gray-500" />
-                        <span>{user.phone || '—'}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <div className="flex items-center gap-2 apple-body text-white/80">
-                      <Building2 size={14} className="text-apple-gray-500" />
-                      <span>{user.branch_id || 'Sin sucursal'}</span>
-                    </div>
-                    {user.vehicle_type && (
-                      <div className="apple-caption text-apple-gray-500 mt-1">
-                        Vehículo: {user.vehicle_type}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <div className="apple-body text-white">
-                      Nivel {user.privilege_level ?? '—'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <div className="apple-caption text-apple-gray-400">
-                      {fmtDate(user.created_at)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 align-top">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        leftIcon={<Pencil size={16} />}
-                        onClick={() => openEdit(user)}
-                      >
-                        Editar
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        leftIcon={<KeyRound size={16} />}
-                        onClick={() => openReset(user)}
-                      >
-                        Reset
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        leftIcon={user.active ? <EyeOff size={16} /> : <Eye size={16} />}
-                        onClick={() => handleToggleActive(user)}
-                      >
-                        {user.active ? 'Desactivar' : 'Activar'}
-                      </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        leftIcon={<Trash2 size={16} />}
-                        onClick={() => setDeleteTarget(user)}
-                      >
-                        Eliminar
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {error && (
-          <div className="border-t border-apple-red-500/40 bg-apple-red-500/10 p-4 text-apple-red-200">
-            {error.message}
-          </div>
-        )}
-
+      <section className="glass-card space-y-5 p-4 sm:p-6">
+        {isLoading && <LoadingState />}
+        {!isLoading && rows.length === 0 && <EmptyState />}
         {!isLoading && rows.length > 0 && (
-          <div className="flex items-center justify-between border-t border-white/5 px-6 py-4 text-apple-caption text-apple-gray-400">
-            <span>
-              Página {page} de {totalPages}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-              >
-                Siguiente
-              </Button>
+          <>
+            <div className="space-y-4">
+              {rows.map((user) => (
+                <article
+                  key={user.id}
+                  className="rounded-apple border border-white/5 bg-white/[0.02] p-4 sm:p-5 shadow-apple-sm transition hover:border-white/20 hover:bg-white/[0.05]"
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="apple-h4 text-white">{user.full_name || 'Sin nombre'}</p>
+                        <StatusBadge active={user.active} />
+                        <span className="rounded-full bg-white/5 px-3 py-1 text-apple-caption text-white/80">
+                          Nivel {user.privilege_level ?? '—'}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-apple-caption text-apple-gray-400">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1">
+                          <Shield size={14} />
+                          {user.username || '—'}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1">
+                          {roleLabel(user.fenix_role)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1">
+                          Creado {fmtDate(user.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-apple-caption text-apple-gray-400">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1">
+                        <Building2 size={14} />
+                        {getUserBranchLabel(user)}
+                      </span>
+                      {user.vehicle_type && (
+                        <span className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1">
+                          Vehículo: {user.vehicle_type}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <DetailTile icon={<Mail size={16} />} label="Correo">
+                      {user.email || 'Sin correo'}
+                    </DetailTile>
+                    <DetailTile icon={<Phone size={16} />} label="Teléfono">
+                      {user.phone || 'Sin teléfono'}
+                    </DetailTile>
+                    <DetailTile icon={<Building2 size={16} />} label="Sucursal">
+                      {getUserBranchLabel(user)}
+                    </DetailTile>
+                    <DetailTile icon={<Car size={16} />} label="Vehículo">
+                      {user.vehicle_type || 'No registrado'}
+                    </DetailTile>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={<Pencil size={16} />}
+                      onClick={() => openEdit(user)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<KeyRound size={16} />}
+                      onClick={() => openReset(user)}
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={user.active ? <EyeOff size={16} /> : <Eye size={16} />}
+                      onClick={() => handleToggleActive(user)}
+                    >
+                      {user.active ? 'Desactivar' : 'Activar'}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      leftIcon={<Trash2 size={16} />}
+                      onClick={() => setDeleteTarget(user)}
+                    >
+                      Eliminar
+                    </Button>
+                  </div>
+                </article>
+              ))}
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-4 text-apple-caption text-apple-gray-400">
+              <div className="inline-flex flex-wrap gap-2">
+                <span className="rounded-full border border-white/10 px-3 py-1 text-white/80">
+                  Mostrando {rows.length} usuarios
+                </span>
+                <span className="rounded-full border border-white/10 px-3 py-1 text-apple-green-200">
+                  Activos {pageActive}
+                </span>
+                {pageInactive > 0 && (
+                  <span className="rounded-full border border-white/10 px-3 py-1 text-apple-red-200">
+                    Inactivos {pageInactive}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+        {error && (
+          <div className="rounded-apple border border-apple-red-500/40 bg-apple-red-500/10 p-4 text-apple-red-200">
+            {error.message}
           </div>
         )}
       </section>
@@ -724,59 +899,34 @@ export default function AdminUsuariosPage() {
             <div>
               <h2 className="apple-h3 text-white">Nuevo usuario</h2>
               <p className="apple-caption text-apple-gray-400">
-                Completa los datos del colaborador. Los campos no obligatorios pueden quedar vacíos.
+                Solo pedimos lo necesario: el sistema completa usuario, correo y contraseña si los dejas en blanco.
               </p>
             </div>
           </ModalHeader>
           <ModalBody className="space-y-5">
+            <div className="rounded-apple border border-white/5 bg-white/[0.03] p-4 text-white/80">
+              <p className="apple-body mb-1">Datos mínimos</p>
+              <p className="apple-caption text-apple-gray-300">
+                Si no especificas usuario, correo o contraseña, el sistema los generará automáticamente con el dominio
+                configurado en Fenix.
+              </p>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="space-y-1">
+              <label className="space-y-2 rounded-apple border border-white/5 bg-white/[0.02] p-3">
                 <span className="apple-caption text-apple-gray-300">Nombre completo *</span>
                 <Input
                   required
                   value={createForm.full_name}
                   onChange={(e) => setCreateForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="Ej. Ana María Pérez"
                 />
               </label>
-              <label className="space-y-1">
-                <span className="apple-caption text-apple-gray-300">Correo electrónico</span>
-                <Input
-                  type="email"
-                  value={createForm.email}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
-                />
-              </label>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="space-y-1">
-                <span className="apple-caption text-apple-gray-300">Usuario (opcional)</span>
-                <Input
-                  value={createForm.username}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, username: e.target.value }))}
-                  placeholder="Se genera automáticamente si lo dejas vacío"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="apple-caption text-apple-gray-300">Contraseña inicial</span>
-                <div className="flex gap-2">
-                  <Input
-                    value={createForm.password}
-                    onChange={(e) => setCreateForm((prev) => ({ ...prev, password: e.target.value }))}
-                    placeholder="Se genera aleatoria si se deja vacío"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setCreateForm((prev) => ({ ...prev, password: randomPassword(12) }))}
-                  >
-                    Generar
-                  </Button>
+              <label className="space-y-2 rounded-apple border border-white/5 bg-white/[0.02] p-3">
+                <div className="flex items-center justify-between">
+                  <span className="apple-caption text-apple-gray-300">Rol</span>
+                  <span className="apple-caption text-apple-gray-500">Define permisos</span>
                 </div>
-              </label>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="space-y-1">
-                <span className="apple-caption text-apple-gray-300">Rol</span>
                 <select
                   className="input-apple"
                   value={createForm.fenix_role}
@@ -789,47 +939,207 @@ export default function AdminUsuariosPage() {
                   ))}
                 </select>
               </label>
-              <label className="space-y-1">
-                <span className="apple-caption text-apple-gray-300">Nivel de privilegio</span>
-                <select
-                  className="input-apple"
-                  value={createForm.privilege_level}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, privilege_level: Number(e.target.value) }))}
-                >
-                  {PRIVILEGE_OPTIONS.map((lvl) => (
-                    <option key={lvl} value={lvl}>
-                      Nivel {lvl}
+              <label
+                className={cn(
+                  'space-y-2 rounded-apple border p-3 sm:col-span-2',
+                  branchHasError ? 'border-apple-red-500/60 bg-apple-red-500/5' : 'border-white/5 bg-white/[0.02]'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="apple-caption text-apple-gray-300">Sucursal asignada</span>
+                  <span
+                    className={cn(
+                      'apple-caption',
+                      branchHasError ? 'text-apple-red-300' : 'text-apple-gray-500'
+                    )}
+                  >
+                    {branchIsRequired ? 'Requerida para este rol' : 'Opcional para Promotor'}
+                  </span>
+                </div>
+                {!customBranchMode && branchOptions.length > 0 ? (
+                  <select
+                    className={cn(
+                      'input-apple',
+                      branchHasError &&
+                        'border-apple-red-500/60 focus-visible:ring-apple-red-500 focus-visible:border-apple-red-500'
+                    )}
+                    value={createForm.branch_id || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const option = branchOptions.find((opt) => opt.value === value);
+                      setCreateForm((prev) => ({
+                        ...prev,
+                        branch_id: value,
+                        branch_label: option?.label ?? value,
+                      }));
+                    }}
+                  >
+                    <option value="" disabled>
+                      Selecciona una sucursal
                     </option>
-                  ))}
-                </select>
+                    {!hasCurrentBranchOption && createForm.branch_id && (
+                      <option value={createForm.branch_id}>
+                        {createForm.branch_label || createForm.branch_id}
+                      </option>
+                    )}
+                    {branchOptions.map((option) => {
+                      return (
+                        <option key={option.key} value={option.value}>
+                          {option.label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                ) : (
+                  <Input
+                    value={createForm.branch_label}
+                    onChange={(e) =>
+                      setCreateForm((prev) => ({
+                        ...prev,
+                        branch_id: e.target.value,
+                        branch_label: e.target.value,
+                      }))
+                    }
+                    placeholder="Escribe el nombre o dirección"
+                    className={cn(
+                      branchHasError &&
+                        'border-apple-red-500/60 focus-visible:ring-apple-red-500 focus-visible:border-apple-red-500'
+                    )}
+                  />
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {branchOptions.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setCustomBranchMode((prev) => {
+                          const next = !prev;
+                          if (!next && branchOptions.length > 0) {
+                            setCreateForm((prevForm) => {
+                              const exists = branchOptions.some((opt) => opt.value === prevForm.branch_id);
+                              if (exists) return prevForm;
+                              return {
+                                ...prevForm,
+                                branch_id: branchOptions[0].value,
+                                branch_label: branchOptions[0].label,
+                              };
+                            });
+                          }
+                          return next;
+                        })
+                      }
+                    >
+                      {customBranchMode ? 'Usar la lista de sucursales' : 'Escribir manualmente'}
+                    </Button>
+                  ) : (
+                    <span className="apple-caption text-apple-gray-500">
+                      No hay sucursales sugeridas, escribe el nombre manualmente.
+                    </span>
+                  )}
+                </div>
+                {branchHasError && (
+                  <p className="apple-caption text-apple-red-300">
+                    Selecciona una sucursal o cambia el rol a Promotor.
+                  </p>
+                )}
               </label>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="space-y-1">
-                <span className="apple-caption text-apple-gray-300">Sucursal</span>
-                <Input
-                  value={createForm.branch_id}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, branch_id: e.target.value }))}
-                  placeholder="Nombre o código"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="apple-caption text-apple-gray-300">Teléfono</span>
-                <Input
-                  value={createForm.phone}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, phone: e.target.value }))}
-                  placeholder="Ej. 70000000"
-                />
-              </label>
+
+            <div className="rounded-apple border border-white/5 bg-white/[0.02] p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="apple-body text-white">Datos opcionales</p>
+                  <p className="apple-caption text-apple-gray-400">
+                    Personaliza credenciales o contacto solo si lo necesitas.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCreateAdvanced((prev) => !prev)}
+                >
+                  {showCreateAdvanced ? 'Ocultar extras' : 'Agregar detalles'}
+                </Button>
+              </div>
+
+              {showCreateAdvanced && (
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="space-y-1">
+                      <span className="apple-caption text-apple-gray-300">Correo electrónico</span>
+                      <Input
+                        type="email"
+                        value={createForm.email}
+                        onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
+                        placeholder="Se completa solo si lo necesitas"
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="apple-caption text-apple-gray-300">Usuario</span>
+                      <Input
+                        value={createForm.username}
+                        onChange={(e) => setCreateForm((prev) => ({ ...prev, username: e.target.value }))}
+                        placeholder="Se genera automáticamente"
+                      />
+                    </label>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="space-y-1">
+                      <span className="apple-caption text-apple-gray-300">Contraseña inicial</span>
+                      <div className="flex gap-2">
+                        <Input
+                          value={createForm.password}
+                          onChange={(e) => setCreateForm((prev) => ({ ...prev, password: e.target.value }))}
+                          placeholder="Si se deja vacío se creará una aleatoria"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setCreateForm((prev) => ({ ...prev, password: randomPassword(12) }))}
+                        >
+                          Generar
+                        </Button>
+                      </div>
+                    </label>
+                    <label className="space-y-1">
+                      <span className="apple-caption text-apple-gray-300">Nivel de privilegio</span>
+                      <select
+                        className="input-apple"
+                        value={createForm.privilege_level}
+                        onChange={(e) => setCreateForm((prev) => ({ ...prev, privilege_level: Number(e.target.value) }))}
+                      >
+                        {PRIVILEGE_OPTIONS.map((lvl) => (
+                          <option key={lvl} value={lvl}>
+                            Nivel {lvl}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="space-y-1">
+                      <span className="apple-caption text-apple-gray-300">Teléfono</span>
+                      <Input
+                        value={createForm.phone}
+                        onChange={(e) => setCreateForm((prev) => ({ ...prev, phone: e.target.value }))}
+                        placeholder="Ej. 70000000"
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="apple-caption text-apple-gray-300">Tipo de vehículo</span>
+                      <Input
+                        value={createForm.vehicle_type}
+                        onChange={(e) => setCreateForm((prev) => ({ ...prev, vehicle_type: e.target.value }))}
+                        placeholder="Motocicleta, automóvil, etc."
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
-            <label className="space-y-1">
-              <span className="apple-caption text-apple-gray-300">Tipo de vehículo</span>
-              <Input
-                value={createForm.vehicle_type}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, vehicle_type: e.target.value }))}
-                placeholder="Motocicleta, automóvil, etc."
-              />
-            </label>
 
             {createdUser && (
               <div className="rounded-apple border border-apple-green-500/40 bg-apple-green-500/10 p-4 text-apple-body text-white">
@@ -961,10 +1271,77 @@ export default function AdminUsuariosPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="space-y-1">
                 <span className="apple-caption text-apple-gray-300">Sucursal</span>
-                <Input
-                  value={editForm.branch_id}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, branch_id: e.target.value }))}
-                />
+                {!editCustomBranchMode && branchOptions.length > 0 ? (
+                  <select
+                    className="input-apple"
+                    value={editForm.branch_id}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const option = branchOptions.find((opt) => opt.value === value);
+                      setEditForm((prev) => ({
+                        ...prev,
+                        branch_id: value,
+                        branch_label: option?.label ?? value,
+                      }));
+                    }}
+                  >
+                    <option value="">Sin sucursal</option>
+                    {!editHasCurrentBranchOption && editForm.branch_id && (
+                      <option value={editForm.branch_id}>
+                        {editForm.branch_label || editForm.branch_id}
+                      </option>
+                    )}
+                    {branchOptions.map((option) => (
+                      <option key={`edit-${option.key}`} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    value={editForm.branch_label}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        branch_id: e.target.value,
+                        branch_label: e.target.value,
+                      }))
+                    }
+                    placeholder="Escribe el nombre o dirección"
+                  />
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {branchOptions.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setEditCustomBranchMode((prev) => {
+                          const next = !prev;
+                          if (!next && branchOptions.length > 0) {
+                            setEditForm((prevForm) => {
+                              const exists = branchOptions.some((opt) => opt.value === prevForm.branch_id);
+                              if (exists) return prevForm;
+                              return {
+                                ...prevForm,
+                                branch_id: branchOptions[0].value,
+                                branch_label: branchOptions[0].label,
+                              };
+                            });
+                          }
+                          return next;
+                        })
+                      }
+                    >
+                      {editCustomBranchMode ? 'Usar la lista de sucursales' : 'Escribir manualmente'}
+                    </Button>
+                  ) : (
+                    <span className="apple-caption text-apple-gray-500">
+                      No hay sucursales sugeridas, escribe manualmente.
+                    </span>
+                  )}
+                </div>
               </label>
               <label className="space-y-1">
                 <span className="apple-caption text-apple-gray-300">Teléfono</span>

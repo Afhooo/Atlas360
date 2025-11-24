@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { authEnv } from '@/lib/auth/env';
+import { flattenLoginInput, normalizeLoginInput } from '@/lib/auth/login-normalize';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -67,8 +68,8 @@ function loadDevUsers(): DevUser[] {
       const role = String(roleRaw || 'ASESOR').toUpperCase();
       const usernameNorm = normalizeLoginInput(username);
       const emailNorm = normalizeLoginInput(email);
-      const usernameFlat = usernameNorm.replace(/[._+-]/g, '');
-      const emailFlat = emailNorm.replace(/[._+-]/g, '');
+      const usernameFlat = flattenLoginInput(usernameNorm);
+      const emailFlat = flattenLoginInput(emailNorm);
       const fullName = username
         .replace(/[_\.]+/g, ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -106,7 +107,7 @@ function validateDevCredentials(username: string, password: string): PersonRecor
   }
 
   const normalizedInput = normalizeLoginInput(username);
-  const flatInput = normalizedInput.replace(/[._+-]/g, '');
+  const flatInput = flattenLoginInput(normalizedInput);
   const match = users.find(
     (user) =>
       user.username_norm === normalizedInput ||
@@ -190,18 +191,6 @@ function normalizeRole(rawRole?: string): string {
   if (['LOGISTICA', 'RUTAS', 'DELIVERY'].includes(role)) return 'LOGISTICA';
   
   return 'ASESOR'; // Rol por defecto más seguro
-}
-
-/**
- * Normaliza el input recibido (username/email) para compararlo contra columnas *_norm
- */
-function normalizeLoginInput(raw: string): string {
-  return String(raw ?? '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '') // elimina diacríticos
-    .replace(/[^a-z0-9@._+-]/g, '');
 }
 
 /**
