@@ -22,6 +22,9 @@ type RowCommon = {
   qty: number;                   // cantidad
   total: number;                 // monto total Bs
   person_id: string;             // UUID unificado
+  kind?: 'order' | 'promoter';
+  approval_status?: string | null;
+  approved_by?: string | null;
 };
 
 type OrdersJoined = {
@@ -31,6 +34,7 @@ type OrdersJoined = {
   seller_role: string | null;
   sales_role: string | null;
   branch_id: string | null;
+  status?: string | null;
 };
 
 type OrderItemJoined = {
@@ -51,6 +55,8 @@ type PromoterSaleRow = {
   quantity: number | null;
   unit_price: number | null;
   promoter_person_id: string;
+  approval_status?: string | null;
+  approved_by?: string | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -100,7 +106,7 @@ export async function GET(req: NextRequest) {
     const sb = supabaseAdmin();
 
     // Helpers de fetch con normalización de shape
-    const baseOrderItemsSelect =
+  const baseOrderItemsSelect =
       `id,
        order_id,
        product_name,
@@ -113,7 +119,8 @@ export async function GET(req: NextRequest) {
          seller,
          seller_role,
          sales_role,
-         branch_id
+         branch_id,
+         status
        )`;
 
     // === Query de order_items con join a orders (por userId o por nombre seller) ===
@@ -169,6 +176,9 @@ export async function GET(req: NextRequest) {
               qty,
               total: subtotal,
               person_id: personId,
+              kind: 'order',
+              approval_status: order?.status ?? null,
+              approved_by: null,
             };
           })
           .filter((r): r is RowCommon => !!r && !!r.order_date);
@@ -186,7 +196,7 @@ export async function GET(req: NextRequest) {
           async (): Promise<PostgrestResponse<PromoterSaleRow>> => {
             const r = await sb
               .from('promoter_sales')
-              .select('id, sale_date, product_name, quantity, unit_price, promoter_person_id')
+              .select('id, sale_date, product_name, quantity, unit_price, promoter_person_id, approval_status, approved_by')
               .eq('promoter_person_id', personId)
               .gte('sale_date', monthStart)
               .lt('sale_date', nextMonthIso)
@@ -209,6 +219,9 @@ export async function GET(req: NextRequest) {
             qty,
             total: qty * unit,                        // calculamos total
             person_id: r.promoter_person_id,          // normalizamos persona
+            kind: 'promoter',
+            approval_status: r.approval_status ?? null,
+            approved_by: r.approved_by ?? null,
           };
         });
 

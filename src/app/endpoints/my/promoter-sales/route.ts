@@ -57,7 +57,10 @@ export async function GET(req: NextRequest) {
         quantity,
         unit_price,
         customer_name,
-        customer_phone
+        customer_phone,
+        approval_status,
+        approved_by,
+        approved_at
       `)
       .eq('promoter_person_id', myId)
       .gte('sale_date', from)

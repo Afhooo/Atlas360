@@ -36,7 +36,8 @@ export default function MiResumenPage() {
 
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const { data: att, isLoading: attLoading } = useSWR(role === 'promotor' ? null : `/endpoints/my/attendance?month=${month}`, fetcher);
-  const { data: sal, isLoading: salLoading } = useSWR(`/endpoints/my/sales?month=${month}`, fetcher);
+  const { data: sal, isLoading: salLoading, mutate: mutateSales } = useSWR(`/endpoints/my/sales?month=${month}`, fetcher);
+  const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
 
   const name = me?.full_name || '—';
   const attKpis = att?.kpis ?? { dias_con_marca: 0, entradas: 0, salidas: 0, pct_geocerca_ok: 0 };
@@ -50,6 +51,49 @@ export default function MiResumenPage() {
   const mySalesPath = role === 'promotor' ? '/dashboard/promotores' : '/mi/resumen';
   const goRegistrarVenta = () => router.push(registerPath);
   const goMisVentas = () => router.push(mySalesPath);
+
+  const canDeleteSale = (row: any) => {
+    const kind = (row?.kind || '').toLowerCase();
+    const status = (row?.approval_status || 'pending').toLowerCase();
+    if (kind === 'promoter') {
+      return status !== 'approved';
+    }
+    // Asesor / pedidos: solo si sigue pendiente (sin validar/asignar)
+    return status === 'pending';
+  };
+
+  const handleDeleteSale = async (row: any) => {
+    const kind = (row?.kind || '').toLowerCase();
+    const status = (row?.approval_status || 'pending').toLowerCase();
+    if (!canDeleteSale(row)) {
+      alert(status === 'approved'
+        ? 'Esta venta ya fue aprobada. Solo el aprobador puede eliminarla.'
+        : 'Esta venta ya fue procesada por un superior.');
+      return;
+    }
+
+    const targetId = kind === 'promoter' ? row?.id : row?.order_id || row?.id;
+    if (!targetId) {
+      alert('No se pudo identificar la venta para eliminar.');
+      return;
+    }
+
+    if (!window.confirm('¿Eliminar esta venta?')) return;
+    setDeletingSaleId(targetId);
+    try {
+      const endpoint = kind === 'promoter'
+        ? `/endpoints/my/promoter-sales/${targetId}`
+        : `/endpoints/orders/${targetId}`;
+      const res = await fetch(endpoint, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.error) throw new Error(json?.error || 'No se pudo eliminar');
+      await mutateSales();
+    } catch (err: any) {
+      alert(err?.message || 'No se pudo eliminar');
+    } finally {
+      setDeletingSaleId(null);
+    }
+  };
 
   const quickActions = useMemo<QuickAction[]>(() => ([
     {
@@ -388,7 +432,9 @@ export default function MiResumenPage() {
                             <th>Pedido</th>
                             <th>Producto</th>
                             <th>Cant</th>
+                            <th>Estado</th>
                             <th className="text-right">Total (Bs)</th>
+                            <th className="text-right">Acciones</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -398,14 +444,31 @@ export default function MiResumenPage() {
                               <td>{r.order_id}</td>
                               <td>{r.product_name}</td>
                               <td>{r.qty}</td>
+                              <td>
+                                <StatusBadge status={r.approval_status} kind={r.kind} />
+                              </td>
                               <td className="text-right">
                                 {Number(r.total || 0).toLocaleString('es-BO', { maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="text-right">
+                                <button
+                                  className="btn-ghost btn-2xs px-2 py-1 rounded border border-red-500/40 text-red-200 hover:bg-red-500/10 disabled:opacity-60"
+                                  onClick={() => handleDeleteSale(r)}
+                                  disabled={!canDeleteSale(r) || deletingSaleId === (r.order_id || r.id)}
+                                  title={
+                                    !canDeleteSale(r)
+                                      ? 'Solo eliminable si está pendiente.'
+                                      : 'Eliminar venta'
+                                  }
+                                >
+                                  {deletingSaleId === (r.order_id || r.id) ? 'Eliminando…' : 'Eliminar'}
+                                </button>
                               </td>
                             </tr>
                           ))}
                           {!sal?.list?.length && (
                             <tr>
-                              <td colSpan={5} className="apple-caption text-[color:var(--app-muted)]">Sin ventas.</td>
+                              <td colSpan={7} className="apple-caption text-[color:var(--app-muted)]">Sin ventas.</td>
                             </tr>
                           )}
                         </tbody>
@@ -419,6 +482,27 @@ export default function MiResumenPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+function StatusBadge({ status, kind }: { status?: string | null; kind?: string | null }) {
+  const normalized = (status || 'pending').toLowerCase();
+  let label = 'Pendiente';
+  let classes = 'bg-amber-500/10 border border-amber-500/40 text-amber-200';
+  if (['approved', 'confirmed', 'delivered', 'assigned', 'out_for_delivery'].includes(normalized)) {
+    label = 'Aprobada';
+    classes = 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-200';
+  } else if (['rejected', 'cancelled', 'returned', 'failed'].includes(normalized)) {
+    label = 'Rechazada';
+    classes = 'bg-red-500/10 border border-red-500/40 text-red-200';
+  }
+  const chip = kind === 'promoter' ? 'Promo' : 'Asesor';
+
+  return (
+    <span className={`inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs ${classes}`}>
+      <span className="uppercase text-[10px] opacity-70">{chip}</span>
+      {label}
+    </span>
   );
 }
 

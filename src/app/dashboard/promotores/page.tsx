@@ -14,6 +14,8 @@ type SalesRow = {
   unit_price: number;
   customer_name: string | null;
   customer_phone: string | null;
+  approval_status?: string | null;
+  approved_by?: string | null;
 };
 
 type Resp = {
@@ -62,6 +64,7 @@ export default function MisVentasPromotor() {
   const [groupBy, setGroupBy] = useState<Grouping>('week');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Resp|null>(null);
+  const [deletingId, setDeletingId] = useState<string|null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,6 +82,28 @@ export default function MisVentasPromotor() {
   }, [from, to]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleDelete = useCallback(async (row: SalesRow) => {
+    const status = (row.approval_status || 'pending').toLowerCase();
+    if (status === 'approved') {
+      alert('Esta venta ya fue aprobada. Solo el aprobador puede eliminarla.');
+      return;
+    }
+    if (!window.confirm('¿Eliminar esta venta?')) return;
+    setDeletingId(row.id);
+    try {
+      const res = await fetch(`/endpoints/my/promoter-sales/${row.id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.error) {
+        throw new Error(json?.error || 'No se pudo eliminar');
+      }
+      await load();
+    } catch (err: any) {
+      alert(err?.message || 'No se pudo eliminar');
+    } finally {
+      setDeletingId(null);
+    }
+  }, [load]);
 
   const grouped = useMemo(()=>{
     const rows = data?.rows || [];
@@ -246,7 +271,9 @@ export default function MisVentasPromotor() {
                 <th className="px-3 py-2 text-right">Cant.</th>
                 <th className="px-3 py-2 text-right">P. Unit.</th>
                 <th className="px-3 py-2">Cliente</th>
+                <th className="px-3 py-2">Estado</th>
                 <th className="px-3 py-2 text-right">Total</th>
+                <th className="px-3 py-2 text-right">Acciones</th>
               </tr>
               </thead>
               <tbody>
@@ -260,7 +287,19 @@ export default function MisVentasPromotor() {
                     <td className="px-3 py-2 text-right">{fmtInt(Number(r.quantity)||0)}</td>
                     <td className="px-3 py-2 text-right">{fmtBs(Number(r.unit_price)||0)}</td>
                     <td className="px-3 py-2">{r.customer_name || '—'}</td>
+                    <td className="px-3 py-2">
+                      <StatusPill status={r.approval_status} />
+                    </td>
                     <td className="px-3 py-2 text-right text-emerald-400">{fmtBs(total)}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        className="text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/40 text-red-200 hover:bg-red-500/15 disabled:opacity-50"
+                        onClick={() => handleDelete(r)}
+                        disabled={deletingId === r.id || (r.approval_status || 'pending').toLowerCase() === 'approved'}
+                      >
+                        {deletingId === r.id ? 'Eliminando…' : 'Eliminar'}
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -287,4 +326,19 @@ function Kpi({ title, value, highlight=false }:{title:string; value:string; high
       </div>
     </div>
   );
+}
+
+function StatusPill({ status }: { status?: string | null }) {
+  const normalized = (status || 'pending').toLowerCase();
+  let label = 'Pendiente';
+  let classes = 'bg-amber-500/10 border border-amber-500/40 text-amber-200';
+  if (normalized === 'approved') {
+    label = 'Aprobada';
+    classes = 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-200';
+  } else if (normalized === 'rejected') {
+    label = 'Rechazada';
+    classes = 'bg-red-500/10 border border-red-500/40 text-red-200';
+  }
+
+  return <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${classes}`}>{label}</span>;
 }
