@@ -46,21 +46,23 @@ export default function MiResumenPage() {
   const permsPath = canReviewPerms ? '/dashboard/permisos' : '/permisos/solicitar';
   const goPermisos = () => router.push(permsPath);
   const goAsistencia = () => router.push('/asistencia');
-  const goRegistrarVenta = () => router.push('/dashboard/promotores/registro');
-  const goMisVentas = () => router.push('/dashboard/promotores');
+  const registerPath = role === 'promotor' ? '/dashboard/promotores/registro' : '/dashboard/asesores/registro';
+  const mySalesPath = role === 'promotor' ? '/dashboard/promotores' : '/mi/resumen';
+  const goRegistrarVenta = () => router.push(registerPath);
+  const goMisVentas = () => router.push(mySalesPath);
 
   const quickActions = useMemo<QuickAction[]>(() => ([
     {
       label: 'Ingresar venta',
       description: 'Registra una venta o pedido en segundos.',
-      href: '/dashboard/promotores/registro',
+      href: registerPath,
       icon: <ShoppingCart size={16} />,
       highlight: true,
     },
     {
       label: 'Mis ventas',
       description: 'Consulta tu histórico y comisiones.',
-      href: '/dashboard/promotores',
+      href: mySalesPath,
       icon: <ListChecks size={16} />,
     },
     {
