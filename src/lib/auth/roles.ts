@@ -74,7 +74,7 @@
       'view:asistencia','view:sales-report','view:playbook','view:validacion-asesores'
     ],
     asesor: [
-      'view:resumen-asesores','view:registro-asesores','view:asistencia','view:playbook','view:mi-resumen'
+      'view:registro-asesores','view:asistencia','view:playbook','view:mi-resumen'
     ],
     promotor: [
       'view:registro-promotores','view:mi-resumen'
