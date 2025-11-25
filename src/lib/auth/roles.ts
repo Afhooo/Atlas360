@@ -121,16 +121,28 @@
      ========================= */
      export function canAccessRoute(role: Role, path: string): boolean {
       if (role === 'admin') return true;
-    
+
+      // Rutas de promotores: prioriza subrutas específicas, luego permite a promotores su panel base.
+      if (path.startsWith('/dashboard/promotores')) {
+        if (/^\/dashboard\/promotores\/validacion(?:\/.*)?$/.test(path)) {
+          return can(role, 'view:validacion-promotores');
+        }
+        if (/^\/dashboard\/promotores\/registro(?:\/.*)?$/.test(path)) {
+          return can(role, 'view:registro-promotores');
+        }
+        if (/^\/dashboard\/promotores\/admin(?:\/.*)?$/.test(path)) {
+          return can(role, 'view:resumen-promotores');
+        }
+        // Mis ventas de promotor (panel personal)
+        return role === 'promotor' || can(role, 'view:resumen-promotores');
+      }
+
       const routeCaps: { pattern: RegExp; cap: Cap }[] = [
         { pattern: /^\/dashboard\/sales-report(?:\/.*)?$/, cap: 'view:sales-report' },
         { pattern: /^\/dashboard\/vendedores(?:\/.*)?$/, cap: 'view:resumen-asesores' },
-        { pattern: /^\/dashboard\/promotores(?:\/.*)?$/, cap: 'view:resumen-promotores' },
-        { pattern: /^\/dashboard\/promotores\/validacion(?:\/.*)?$/, cap: 'view:validacion-promotores' },
         { pattern: /^\/dashboard\/admin\/resumen(?:\/.*)?$/, cap: 'view:reporte-asistencia' },
         { pattern: /^\/logistica(?:\/.*)?$/, cap: 'view:logistica' },
         { pattern: /^\/dashboard\/asesores\/registro(?:\/.*)?$/, cap: 'view:registro-asesores' },
-        { pattern: /^\/dashboard\/promotores\/registro(?:\/.*)?$/, cap: 'view:registro-promotores' },
         { pattern: /^\/dashboard\/asesores\/devoluciones(?:\/.*)?$/, cap: 'view:devoluciones' },
         { pattern: /^\/dashboard\/inventario(?:\/.*)?$/, cap: 'view:inventario' },
         { pattern: /^\/asistencia(?:\/.*)?$/, cap: 'view:asistencia' },
@@ -138,7 +150,7 @@
         { pattern: /^\/dashboard\/admin\/usuarios(?:\/.*)?$/, cap: 'view:users-admin' },
         { pattern: /^\/mi\/resumen(?:\/.*)?$/, cap: 'view:mi-resumen' },
       ];
-    
+
       const hit = routeCaps.find(r => r.pattern.test(path));
       return hit ? can(role, hit.cap) : true;
     }
