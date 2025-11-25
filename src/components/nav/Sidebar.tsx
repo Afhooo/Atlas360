@@ -61,13 +61,14 @@ const NavLink: FC<{ item: NavLinkItem; active?: boolean; onClick?: () => void }>
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={[
-        'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-apple-body font-medium',
+        'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-apple-body font-medium min-w-0',
         'transition-all duration-300 ease-apple',
         'hover:bg-[color:var(--hover-surface)] hover:backdrop-blur-sm dark:hover:bg-white/10',
         active
           ? 'text-[color:var(--app-foreground)] dark:text-white bg-gradient-to-r from-apple-blue-500/10 to-apple-green-500/10 dark:from-apple-blue-600/20 dark:to-apple-blue-500/10 border border-[color:var(--app-border-strong)] dark:border-apple-blue-500/30 shadow-[0_8px_24px_rgba(36,99,235,0.18)] dark:shadow-primary'
           : 'text-apple-gray-600 hover:text-[color:var(--app-foreground)] dark:text-apple-gray-300 dark:hover:text-white',
       ].join(' ')}
+      title={item.label}
     >
       {active && (
         <motion.div
@@ -82,7 +83,7 @@ const NavLink: FC<{ item: NavLinkItem; active?: boolean; onClick?: () => void }>
       ].join(' ')}>
         {item.icon}
       </div>
-      <span className="flex-1 truncate">{item.label}</span>
+      <span className="flex-1 min-w-0 text-left whitespace-normal leading-tight break-words">{item.label}</span>
       {item.shortcut && (
         <kbd className={[
           'text-apple-caption2 font-mono px-1.5 py-0.5 rounded border transition-all duration-300',
@@ -100,6 +101,11 @@ const NavLink: FC<{ item: NavLinkItem; active?: boolean; onClick?: () => void }>
           active ? 'text-apple-blue-400' : 'text-current',
         ].join(' ')}
       />
+      <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300 hidden xl:block">
+        <div className="px-3 py-1 rounded-lg bg-black/85 text-apple-caption2 text-white shadow-xl border border-white/10 whitespace-nowrap">
+          {item.label}
+        </div>
+      </div>
     </Link>
   </motion.div>
 );
@@ -198,11 +204,11 @@ export const Sidebar: FC<SidebarProps> = ({
   return (
     <AnimatePresence>
       <motion.aside
-        initial={{ x: -288 }}
-        animate={{ x: isOpen || typeof window === 'undefined' || window.innerWidth >= 1024 ? 0 : -288 }}
-        exit={{ x: -288 }}
+        initial={{ x: -320 }}
+        animate={{ x: isOpen || typeof window === 'undefined' || window.innerWidth >= 1024 ? 0 : -320 }}
+        exit={{ x: -320 }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className="fixed left-0 top-0 h-screen w-72 z-50 flex flex-col glass backdrop-blur-apple-lg border-r border-[color:var(--app-border)] dark:border-white/10 transition-colors duration-500 lg:translate-x-0 lg:static lg:z-30"
+        className="fixed left-0 top-0 h-screen w-80 z-50 flex flex-col glass backdrop-blur-apple-lg border-r border-[color:var(--app-border)] dark:border-white/10 transition-colors duration-500 lg:translate-x-0 lg:static lg:z-30"
       >
         <div className="p-6 border-b border-[color:var(--app-border)] dark:border-white/10 transition-colors duration-500">
           <Link href={ROUTES.DASH} className="group flex items-center gap-3" onClick={onClose}>
