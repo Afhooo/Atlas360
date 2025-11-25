@@ -262,8 +262,26 @@ export async function POST(req: Request) {
     if (error) {
       const pgError = error as PostgrestError;
       const friendly = mapPeopleConstraintMessage(pgError);
-      const msg = friendly
-        ?? (pgError?.code === '23505' ? 'Username o email ya existen' : pgError?.message);
+      if (pgError?.code === '23505') {
+        const { data: conflict } = await supabase
+          .from('people')
+          .select('id, full_name, username, email, active, fenix_role')
+          .or(`username.eq.${username},email.eq.${email}`)
+          .limit(1)
+          .single();
+
+        const state = conflict
+          ? conflict.active
+            ? 'activo'
+            : 'inactivo'
+          : null;
+        const msg = conflict
+          ? `Ya existe el usuario ${conflict.username || conflict.email} (${state}). Búscalo en Usuarios (incluye inactivos) o cambia usuario/correo.`
+          : 'Username o email ya existen';
+        throw new Error(msg);
+      }
+
+      const msg = friendly ?? pgError?.message;
       throw new Error(msg || 'Create user failed');
     }
 
