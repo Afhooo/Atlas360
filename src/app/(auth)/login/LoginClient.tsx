@@ -541,8 +541,13 @@ export function LoginClient() {
             transition={{ delay: 0.6, duration: 0.5 }}
             className="text-center mt-8"
           >
-            <p className="apple-caption text-apple-gray-500">
-              © 2024 Fenix Store. Todos los derechos reservados.
+            <p className="apple-caption text-apple-gray-500 flex flex-col sm:flex-row items-center justify-center gap-2">
+              <span>© 2025 Fenix Store. Todos los derechos reservados.</span>
+              <span className="hidden sm:inline text-apple-gray-700">•</span>
+              <span className="inline-flex items-center gap-2">
+                <span className="uppercase tracking-[0.22em] text-[11px] text-apple-gray-400">Diseñado por</span>
+                <span className="font-semibold text-white">Altius Ignite</span>
+              </span>
             </p>
           </motion.div>
         </motion.div>
