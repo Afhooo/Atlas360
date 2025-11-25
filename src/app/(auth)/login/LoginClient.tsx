@@ -539,16 +539,19 @@ export function LoginClient() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6, duration: 0.5 }}
-            className="text-center mt-8"
+            className="mt-10"
           >
-            <p className="apple-caption text-apple-gray-500 flex flex-col sm:flex-row items-center justify-center gap-2">
-              <span>© 2025 Fenix Store. Todos los derechos reservados.</span>
-              <span className="hidden sm:inline text-apple-gray-700">•</span>
-              <span className="inline-flex items-center gap-2">
-                <span className="uppercase tracking-[0.22em] text-[11px] text-apple-gray-400">Diseñado por</span>
-                <span className="font-semibold text-white">Altius Ignite</span>
-              </span>
-            </p>
+            <div className="flex flex-col items-center gap-3 text-apple-gray-400">
+              <div className="h-px w-24 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 text-[13px]">
+                <span className="text-white/70">© 2025 Fenix Store. Todos los derechos reservados.</span>
+                <span className="hidden sm:inline text-white/20">•</span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 backdrop-blur-sm shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-white/55">Designed by</span>
+                  <span className="text-[13px] font-semibold text-white">Altius Ignite</span>
+                </span>
+              </div>
+            </div>
           </motion.div>
         </motion.div>
       </div>
