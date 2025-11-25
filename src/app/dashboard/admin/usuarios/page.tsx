@@ -308,6 +308,7 @@ export default function AdminUsuariosPage() {
   const { data: sites } = useSWR<Site[]>('/endpoints/sites', fetchSites);
   const branchOptions = useMemo<BranchOption[]>(() => {
     const map = new Map<string, BranchOption>();
+    const hasSites = (sites?.length ?? 0) > 0;
 
     const addSiteOption = (
       value?: string | null,
@@ -355,14 +356,20 @@ export default function AdminUsuariosPage() {
 
     (sites ?? []).forEach((site) => addSiteOption(site?.id, site?.name, 'site'));
 
-    rows.forEach((user) => {
-      if (user.site_id) {
-        addSiteOption(user.site_id, user.site_name ?? user.branch_id ?? user.site_id, 'people');
-      }
-      if (user.branch_id) {
-        addLegacyOption(user.branch_id, user.branch_id, 'people');
-      }
-    });
+    // Plan B: si tenemos sites, NO agregamos legacy branch_id para evitar duplicados; si no hay sites, usamos branch_id como fallback.
+    if (!hasSites) {
+      rows.forEach((user) => {
+        if (user.branch_id) {
+          addLegacyOption(user.branch_id, user.branch_id, 'people');
+        }
+      });
+    } else {
+      rows.forEach((user) => {
+        if (user.site_id) {
+          addSiteOption(user.site_id, user.site_name ?? user.branch_id ?? user.site_id, 'people');
+        }
+      });
+    }
 
     if (createdUser) {
       const createdLocal =
@@ -390,9 +397,24 @@ export default function AdminUsuariosPage() {
       }
     }
 
-    return Array.from(map.values()).sort((a, b) =>
-      a.label.localeCompare(b.label, 'es', { sensitivity: 'base' })
-    );
+    const weight = (opt: BranchOption) => {
+      if (opt.kind === 'site') return 3;
+      if (opt.source === 'manual') return 2;
+      return 1; // legacy/people
+    };
+
+    const bestByLabel = new Map<string, BranchOption>();
+    Array.from(map.values()).forEach((opt) => {
+      const labelNorm = (opt.label || opt.value || '').trim().toLowerCase();
+      if (!labelNorm) return;
+      const prev = bestByLabel.get(labelNorm);
+      if (!prev || weight(opt) > weight(prev)) {
+        bestByLabel.set(labelNorm, opt);
+      }
+    });
+
+    return Array.from(bestByLabel.values())
+      .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
   }, [rows, sites, createdUser, branchFilter]);
 
   useEffect(() => {

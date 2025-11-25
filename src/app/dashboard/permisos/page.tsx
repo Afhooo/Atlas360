@@ -41,6 +41,11 @@ export default function DashboardPermisosPage() {
   const router = useRouter();
   const { data: me } = useSWR('/endpoints/me', fetcher);
   const role: Role = useMemo(() => norm(me?.role), [me?.role]);
+  const SUCRE_LEADS = ['9273d6bf-858c-47f3-9a8d-93531ca593e2'];
+  const isSucreLead = useMemo(
+    () => SUCRE_LEADS.includes(String(me?.person_pk ?? me?.id ?? '')),
+    [me?.person_pk, me?.id]
+  );
 
   const hasAccess = useMemo(() => {
     if (!me) return false;
@@ -53,7 +58,7 @@ export default function DashboardPermisosPage() {
   }, [me, hasAccess, router]);
 
   const [month, setMonth] = useState<string>(new Date().toISOString().slice(0,7)); // YYYY-MM
-  const [branch, setBranch] = useState<string>('Todas');
+  const [branch, setBranch] = useState<string>(isSucreLead ? 'Sucre' : 'Todas');
   const [q, setQ] = useState<string>('');
   const shouldFetch = hasAccess ? `/endpoints/permissions?month=${month}&branch=${encodeURIComponent(branch)}&q=${encodeURIComponent(q)}` : null;
   const { data, mutate, isLoading } = useSWR<{
@@ -61,7 +66,15 @@ export default function DashboardPermisosPage() {
     branches: string[];
   }>(shouldFetch, fetcher);
 
-  const branches = ['Todas', ...(data?.branches || [])];
+  useEffect(() => {
+    if (isSucreLead) setBranch('Sucre');
+  }, [isSucreLead]);
+
+  const branches = useMemo(() => {
+    if (isSucreLead) return ['Sucre'];
+    const uniq = new Set(data?.branches || []);
+    return ['Todas', ...Array.from(uniq).sort((a, b) => a.localeCompare(b))];
+  }, [data?.branches, isSucreLead]);
 
   const grouped = useMemo(() => {
     const source = data?.list ?? [];
@@ -123,7 +136,12 @@ export default function DashboardPermisosPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="flex items-center gap-2">
               <span className="pill"><Filter size={16}/></span>
-              <select value={branch} onChange={(e)=>setBranch(e.target.value)} className="field-sm w-full">
+              <select
+                value={branch}
+                onChange={(e)=>setBranch(e.target.value)}
+                className="field-sm w-full"
+                disabled={isSucreLead}
+              >
                 {branches.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>

@@ -35,6 +35,7 @@ type MeResp = {
   username?: string | null;
   role?: string | null;
   local?: string | null;
+  person_pk?: string | null;
 };
 
 const fetcher = (u: string) => fetch(u, { cache: 'no-store' }).then((r) => r.json());
@@ -56,16 +57,19 @@ export default function ValidacionVentasAsesores() {
 
   const roleUpper = (me?.role || '').toUpperCase();
   const isLider = roleUpper === 'LIDER';
+  const SUCRE_LEADS = ['9273d6bf-858c-47f3-9a8d-93531ca593e2'];
+  const isSucreLead = SUCRE_LEADS.includes(String(me?.person_pk ?? me?.id ?? ''));
   const scope = isLider ? 'team' : 'all';
 
   const qs = new URLSearchParams({ from, to, q, status: 'pending', scope });
-  if (branch) qs.set('branch', branch);
-  if (isLider && me?.id) qs.set('leader_id', me.id);
+  if (branch || isSucreLead) qs.set('branch', branch || 'Sucre');
+  if ((isLider || isSucreLead) && me?.id) qs.set('leader_id', me.id);
   const { data, mutate, isLoading } = useSWR<SalesResp>(`/endpoints/asesores/sales?${qs.toString()}`, fetcher);
 
   const rows = useMemo(() => {
     let list = data?.rows || [];
-    if (branch) list = list.filter((r) => (r.branch || '').toLowerCase() === branch.toLowerCase());
+    const branchFilter = branch || (isSucreLead ? 'Sucre' : '');
+    if (branchFilter) list = list.filter((r) => (r.branch || '').toLowerCase() === branchFilter.toLowerCase());
     if (q.trim()) {
       const needle = q.trim().toLowerCase();
       list = list.filter((r) =>
@@ -81,9 +85,11 @@ export default function ValidacionVentasAsesores() {
 
   const branches = useMemo(() => {
     const set = new Set<string>();
-    (data?.rows || []).forEach((r) => { if (r.branch) set.add(r.branch); });
-    return ['Todas', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-  }, [data?.rows]);
+    (data?.rows || []).forEach((r) => { if (r.branch) set.add(r.branch.trim()); });
+    const list = Array.from(set).sort((a, b) => a.localeCompare(b));
+    if (isSucreLead) return ['Sucre'];
+    return ['Todas', ...list];
+  }, [data?.rows, isSucreLead]);
 
   const stats = useMemo(() => {
     const items = rows.reduce((s, r) => s + Number(r.quantity || 0), 0);
@@ -184,7 +190,12 @@ export default function ValidacionVentasAsesores() {
             <label className="apple-caption text-apple-gray-400">Sucursal</label>
             <div className="flex items-center gap-2">
               <span className="pill"><Filter size={14} /></span>
-              <select value={branch} onChange={(e) => setBranch(e.target.value)} className="field w-full">
+              <select
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                className="field w-full"
+                disabled={isSucreLead}
+              >
                 {branches.map((b) => (
                   <option key={b} value={b === 'Todas' ? '' : b}>{b}</option>
                 ))}

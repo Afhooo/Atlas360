@@ -144,7 +144,10 @@ export async function GET(req: Request) {
     if (branchFilter?.type === 'none') {
       query = query.is('site_id', null).is('local', null);
     } else if (branchFilter?.type === 'site') {
-      query = query.eq('site_id', branchFilter.siteId);
+      query = query
+        .eq('site_id', branchFilter.siteId)
+        // Excluimos promotores sin depender del casing ni del sufijo (PROMOTOR / PROMOTORA).
+        .not('fenix_role', 'ilike', 'PROMOTOR%');
     } else if (branchFilter?.type === 'legacy') {
       query = query.ilike('local', `%${branchFilter.term}%`);
     }
@@ -203,6 +206,9 @@ export async function POST(req: Request) {
 
     if (!full_name) return NextResponse.json({ ok: false, error: 'full_name es requerido' }, { status: 400 });
 
+    const userProvidedUsername = typeof body.username === 'string' && !!body.username.trim();
+    const userProvidedEmail = typeof body.email === 'string' && !!body.email.trim();
+
     const base = full_name
       .toLowerCase()
       .normalize('NFD')
@@ -211,15 +217,21 @@ export async function POST(req: Request) {
       .replace(/\.+/g, '.')
       .replace(/^\./, '')
       .replace(/\.$/, '');
-    const suffix = Math.random().toString(16).slice(2, 6);
-    const username: string = (typeof body.username === 'string' && body.username.trim()
-      ? body.username
-      : `${base}_${suffix}`).toLowerCase();
-
     const domain = (process.env.LOGIN_DOMAIN || 'fenix.local').trim();
-    const email: string = (typeof body.email === 'string' && body.email.trim()
-      ? body.email
-      : `${username}@${domain}`).toLowerCase();
+
+    const generateCredentials = () => {
+      const suffix = Math.random().toString(16).slice(2, 6);
+      const username = `${base}_${suffix}`.toLowerCase();
+      const email = `${username}@${domain}`.toLowerCase();
+      return { username, email };
+    };
+
+    const initialUsername = userProvidedUsername
+      ? String(body.username).trim().toLowerCase()
+      : generateCredentials().username;
+    const initialEmail = userProvidedEmail
+      ? String(body.email).trim().toLowerCase()
+      : `${initialUsername}@${domain}`.toLowerCase();
 
     const plain = typeof body.password === 'string' && body.password.length >= 6
       ? body.password
@@ -227,13 +239,15 @@ export async function POST(req: Request) {
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(plain, salt);
 
-    const usernameIndexes = buildLoginIndexes(username);
-    const emailIndexes = buildLoginIndexes(email);
-    const loginIndexValues: LoginIndexValues = {
-      username_norm: usernameIndexes.norm,
-      username_flat: usernameIndexes.flat,
-      email_norm: emailIndexes.norm,
-      email_flat: emailIndexes.flat,
+    const buildLoginIndexValues = (u: string, e: string): LoginIndexValues => {
+      const usernameIndexes = buildLoginIndexes(u);
+      const emailIndexes = buildLoginIndexes(e);
+      return {
+        username_norm: usernameIndexes.norm,
+        username_flat: usernameIndexes.flat,
+        email_norm: emailIndexes.norm,
+        email_flat: emailIndexes.flat,
+      };
     };
 
     const basePayload = {
@@ -245,49 +259,78 @@ export async function POST(req: Request) {
       site_id: site_id ?? null,
       phone,
       vehicle_type,
-      username,
-      email,
+      username: initialUsername,
+      email: initialEmail,
       active: true,
       password_hash,
       initial_password_plain_text: plain,
     };
 
-    const { data, error } = await runWithLoginIndexFallback(
-      loginIndexSupport,
-      basePayload,
-      loginIndexValues,
-      async (payload) => await supabase.from('people').insert(payload).select('*').single(),
-      (column) => console.warn(`[users] people.${column} no existe. Reintentando sin ese campo.`)
-    );
-    if (error) {
-      const pgError = error as PostgrestError;
-      const friendly = mapPeopleConstraintMessage(pgError);
-      if (pgError?.code === '23505') {
-        const { data: conflict } = await supabase
-          .from('people')
-          .select('id, full_name, username, email, active, fenix_role')
-          .or(`username.eq.${username},email.eq.${email}`)
-          .limit(1)
-          .single();
+    let attemptUsername = initialUsername;
+    let attemptEmail = initialEmail;
+    let lastError: PostgrestError | null = null;
 
-        const state = conflict
-          ? conflict.active
-            ? 'activo'
-            : 'inactivo'
-          : null;
-        const msg = conflict
-          ? `Ya existe el usuario ${conflict.username || conflict.email} (${state}). Búscalo en Usuarios (incluye inactivos) o cambia usuario/correo.`
-          : 'Username o email ya existen';
-        throw new Error(msg);
+    for (let i = 0; i < 3; i++) {
+      const loginIndexValues = buildLoginIndexValues(attemptUsername, attemptEmail);
+      const { data, error } = await runWithLoginIndexFallback(
+        loginIndexSupport,
+        { ...basePayload, username: attemptUsername, email: attemptEmail },
+        loginIndexValues,
+        async (payload) => await supabase.from('people').insert(payload).select('*').single(),
+        (column) => console.warn(`[users] people.${column} no existe. Reintentando sin ese campo.`)
+      );
+
+      if (!error) {
+        return NextResponse.json({ ok: true, data });
       }
 
-      const msg = friendly ?? pgError?.message;
-      throw new Error(msg || 'Create user failed');
+      const pgError = error as PostgrestError;
+      lastError = pgError;
+
+      if (pgError?.code === '23505') {
+        // Si el usuario proporcionó username/email, no intentamos regenerar.
+        if (userProvidedUsername || userProvidedEmail) {
+          const { data: conflict } = await supabase
+            .from('people')
+            .select('id, full_name, username, email, active, fenix_role')
+            .or(`username.eq.${attemptUsername},email.eq.${attemptEmail}`)
+            .limit(1)
+            .single();
+
+          const state = conflict
+            ? conflict.active
+              ? 'activo'
+              : 'inactivo'
+            : null;
+          const msg = conflict
+            ? `Ya existe el usuario ${conflict.username || conflict.email} (${state}). Búscalo en Usuarios (incluye inactivos) o cambia usuario/correo.`
+            : 'Username o email ya existen';
+          throw new Error(msg);
+        }
+
+        // Si no fue provisto por el usuario, regeneramos credenciales y reintentamos.
+        const regenerated = generateCredentials();
+        attemptUsername = regenerated.username;
+        attemptEmail = regenerated.email;
+        continue;
+      }
+
+      const friendly = mapPeopleConstraintMessage(pgError);
+      const msg = friendly ?? pgError?.message ?? 'Create user failed';
+      throw new Error(msg);
     }
 
-    return NextResponse.json({ ok: true, data });
+    // Si agotamos los intentos, devolvemos el último error conocido.
+    if (lastError) {
+      const friendly = mapPeopleConstraintMessage(lastError);
+      throw new Error(friendly ?? lastError.message ?? 'Create user failed');
+    }
+
+    throw new Error('Create user failed');
   } catch (err) {
     console.error('POST /endpoints/users error:', err);
-    return NextResponse.json({ ok: false, error: errorMessage(err, 'Create user failed') }, { status: 500 });
+    const msg = errorMessage(err, 'Create user failed');
+    const status = /ya existe el usuario|username o email ya existen/i.test(msg) ? 409 : 500;
+    return NextResponse.json({ ok: false, error: msg }, { status });
   }
 }
