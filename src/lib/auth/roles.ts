@@ -11,6 +11,7 @@
    REPORTE_VENDEDORES: '/dashboard/vendedores',
    REPORTE_PROMOTORES: '/dashboard/promotores/admin',
     VALIDACION_PROMOTORES: '/dashboard/promotores/validacion',
+    VALIDACION_ASESORES: '/dashboard/asesores/validacion',
     ASISTENCIA_PANEL: '/dashboard/admin/resumen',
   
     // Operación
@@ -43,6 +44,7 @@
     | 'view:sales-report'
     | 'view:resumen-asesores'
     | 'view:resumen-promotores'
+    | 'view:validacion-asesores'
     | 'view:validacion-promotores'
     | 'view:reporte-asistencia'
     | 'view:logistica'
@@ -62,14 +64,14 @@
     admin: [
       'view:kpis','view:sales-report','view:resumen-asesores','view:resumen-promotores','view:reporte-asistencia',
       'view:logistica','view:inventario','view:registro-asesores','view:registro-promotores','view:devoluciones','view:asistencia',
-      'view:playbook','view:users-admin','view:mi-resumen','view:validacion-promotores'
+      'view:playbook','view:users-admin','view:mi-resumen','view:validacion-promotores','view:validacion-asesores'
     ],
     coordinador: [
       'view:kpis','view:logistica','view:inventario','view:asistencia','view:reporte-asistencia','view:resumen-asesores','view:playbook'
     ],
     lider: [
       'view:kpis','view:resumen-asesores','view:resumen-promotores','view:reporte-asistencia','view:logistica',
-      'view:asistencia','view:sales-report','view:playbook'
+      'view:asistencia','view:sales-report','view:playbook','view:validacion-asesores'
     ],
     asesor: [
       'view:resumen-asesores','view:registro-asesores','view:asistencia','view:playbook','view:mi-resumen'
@@ -123,7 +125,7 @@
       if (role === 'admin') return true;
 
       // Rutas de promotores: prioriza subrutas específicas, luego permite a promotores su panel base.
-      if (path.startsWith('/dashboard/promotores')) {
+     if (path.startsWith('/dashboard/promotores')) {
         if (/^\/dashboard\/promotores\/validacion(?:\/.*)?$/.test(path)) {
           return can(role, 'view:validacion-promotores');
         }
@@ -135,6 +137,9 @@
         }
         // Mis ventas de promotor (panel personal)
         return role === 'promotor' || can(role, 'view:resumen-promotores');
+      }
+      if (/^\/dashboard\/asesores\/validacion(?:\/.*)?$/.test(path)) {
+        return can(role, 'view:validacion-asesores');
       }
 
       const routeCaps: { pattern: RegExp; cap: Cap }[] = [

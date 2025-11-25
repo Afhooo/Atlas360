@@ -12,9 +12,8 @@ type SalesRow = {
   id: string;
   sale_date: string;
   created_at: string;
-  promoter_name: string;
-  origin: string;
-  district?: string | null;
+  seller_name: string;
+  branch: string | null;
   product_name: string;
   quantity: number;
   unit_price: number;
@@ -31,9 +30,11 @@ type SalesResp = {
 
 type MeResp = {
   ok: boolean;
+  id?: string;
   full_name?: string | null;
   username?: string | null;
   role?: string | null;
+  local?: string | null;
 };
 
 const fetcher = (u: string) => fetch(u, { cache: 'no-store' }).then((r) => r.json());
@@ -42,45 +43,47 @@ const startOfYear = () => new Date(new Date().getFullYear(), 0, 1);
 const endOfYear = () => new Date(new Date().getFullYear(), 11, 31);
 const fmtBs = (n: number) => `Bs ${n.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const Card = ({ title, value, subtitle }: { title: string; value: React.ReactNode; subtitle?: string }) => (
-  <div className="glass-card border border-white/5">
-    <p className="apple-caption text-apple-gray-400 mb-1">{title}</p>
-    <div className="flex items-baseline gap-2">
-      <span className="apple-h2 text-white">{value}</span>
-      {subtitle && <span className="apple-caption text-apple-gray-500">{subtitle}</span>}
-    </div>
-  </div>
-);
-
-export default function ValidacionVentasPromotores() {
-  const [from, setFrom] = useState(iso(startOfYear())); // cubre todo el año (ej. octubre)
+export default function ValidacionVentasAsesores() {
+  const [from, setFrom] = useState(iso(startOfYear())); // cubre todo el año
   const [to, setTo] = useState(iso(endOfYear()));
   const [q, setQ] = useState('');
-  const [origin, setOrigin] = useState('');
+  const [branch, setBranch] = useState('');
   const [noteById, setNoteById] = useState<Record<string, string>>({});
   const [ticketById, setTicketById] = useState<Record<string, string>>({});
   const [actioning, setActioning] = useState<string | null>(null);
 
   const { data: me } = useSWR<MeResp>('/endpoints/me', fetcher);
 
-  const qs = new URLSearchParams({ from, to, q, status: 'pending' });
-  const { data, mutate, isLoading } = useSWR<SalesResp>(`/endpoints/promoters/sales?${qs.toString()}`, fetcher);
+  const roleUpper = (me?.role || '').toUpperCase();
+  const isLider = roleUpper === 'LIDER';
+  const scope = isLider ? 'team' : 'all';
+
+  const qs = new URLSearchParams({ from, to, q, status: 'pending', scope });
+  if (branch) qs.set('branch', branch);
+  if (isLider && me?.id) qs.set('leader_id', me.id);
+  const { data, mutate, isLoading } = useSWR<SalesResp>(`/endpoints/asesores/sales?${qs.toString()}`, fetcher);
 
   const rows = useMemo(() => {
     let list = data?.rows || [];
-    if (origin) list = list.filter((r) => r.origin === origin);
+    if (branch) list = list.filter((r) => (r.branch || '').toLowerCase() === branch.toLowerCase());
     if (q.trim()) {
       const needle = q.trim().toLowerCase();
       list = list.filter((r) =>
-        (r.promoter_name || '').toLowerCase().includes(needle) ||
+        (r.seller_name || '').toLowerCase().includes(needle) ||
         (r.product_name || '').toLowerCase().includes(needle) ||
         (r.customer_name || '').toLowerCase().includes(needle) ||
         (r.customer_phone || '').toLowerCase().includes(needle) ||
-        (r.district || '').toLowerCase().includes(needle)
+        (r.branch || '').toLowerCase().includes(needle)
       );
     }
     return [...list].sort((a, b) => b.sale_date.localeCompare(a.sale_date));
-  }, [data?.rows, origin, q]);
+  }, [data?.rows, branch, q]);
+
+  const branches = useMemo(() => {
+    const set = new Set<string>();
+    (data?.rows || []).forEach((r) => { if (r.branch) set.add(r.branch); });
+    return ['Todas', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [data?.rows]);
 
   const stats = useMemo(() => {
     const items = rows.reduce((s, r) => s + Number(r.quantity || 0), 0);
@@ -116,7 +119,7 @@ export default function ValidacionVentasPromotores() {
     if (status === 'rejected' && !window.confirm('¿Rechazar esta venta?')) return;
     setActioning(`${id}-${status}`);
     try {
-      const res = await fetch(`/endpoints/promoters/sales/${id}`, {
+      const res = await fetch(`/endpoints/asesores/sales/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -124,6 +127,7 @@ export default function ValidacionVentasPromotores() {
           note: noteById[id],
           ticket: ticketById[id],
           approver,
+          leader_id: isLider ? me?.id : undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -136,7 +140,7 @@ export default function ValidacionVentasPromotores() {
     }
   };
 
-  const isUnauthorized = me && String(me.role || '').toUpperCase() === 'PROMOTOR';
+  const isUnauthorized = me && (roleUpper === 'PROMOTOR' || roleUpper === 'ASESOR');
 
   if (isUnauthorized) {
     return (
@@ -157,8 +161,10 @@ export default function ValidacionVentasPromotores() {
             <Clock3 className="text-apple-blue-300" size={20} />
           </div>
           <div>
-            <h1 className="apple-h1">Validación de ventas (Promotores)</h1>
-            <p className="apple-caption text-apple-gray-300">Autoriza ventas pendientes antes de que entren al dashboard.</p>
+            <h1 className="apple-h1">Validación de ventas (Asesores)</h1>
+            <p className="apple-caption text-apple-gray-300">
+              Autoriza ventas pendientes de tu equipo antes de que entren al dashboard.
+            </p>
           </div>
         </div>
       </header>
@@ -175,18 +181,13 @@ export default function ValidacionVentasPromotores() {
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="field w-full" />
           </div>
           <div>
-            <label className="apple-caption text-apple-gray-400">Origen</label>
+            <label className="apple-caption text-apple-gray-400">Sucursal</label>
             <div className="flex items-center gap-2">
               <span className="pill"><Filter size={14} /></span>
-              <select value={origin} onChange={(e) => setOrigin(e.target.value)} className="field w-full">
-                <option value="">Todos</option>
-                <option value="cochabamba">Cochabamba</option>
-                <option value="lapaz">La Paz</option>
-                <option value="elalto">El Alto</option>
-                <option value="santacruz">Santa Cruz</option>
-                <option value="sucre">Sucre</option>
-                <option value="encomienda">Encomienda</option>
-                <option value="tienda">Tienda</option>
+              <select value={branch} onChange={(e) => setBranch(e.target.value)} className="field w-full">
+                {branches.map((b) => (
+                  <option key={b} value={b === 'Todas' ? '' : b}>{b}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -197,7 +198,7 @@ export default function ValidacionVentasPromotores() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Promotor, producto, cliente, zona…"
+                placeholder="Asesor, producto, cliente, sucursal…"
                 className="field w-full"
               />
             </div>
@@ -205,7 +206,7 @@ export default function ValidacionVentasPromotores() {
         </div>
       </section>
 
-      {/* KPIs con diseño alineado a otros dashboards */}
+      {/* KPIs */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           {
@@ -310,11 +311,11 @@ export default function ValidacionVentasPromotores() {
             <thead className="text-apple-gray-300 border-b border-white/10">
               <tr>
                 <th className="px-3 py-2 text-left">Fecha</th>
-                <th className="px-3 py-2 text-left">Promotor</th>
+                <th className="px-3 py-2 text-left">Asesor(a)</th>
                 <th className="px-3 py-2 text-left">Producto</th>
+                <th className="px-3 py-2 text-left">Sucursal</th>
                 <th className="px-3 py-2 text-right">Cantidad</th>
                 <th className="px-3 py-2 text-right">Total</th>
-                <th className="px-3 py-2 text-left">Origen / Zona</th>
                 <th className="px-3 py-2 text-left">Cliente</th>
                 <th className="px-3 py-2 text-left">Ticket</th>
                 <th className="px-3 py-2 text-left">Nota</th>
@@ -331,17 +332,17 @@ export default function ValidacionVentasPromotores() {
                     <td className="px-3 py-2">{r.sale_date?.slice(0, 10)}</td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
-                        <span className="pill text-xs"><User size={12} /> {r.promoter_name || '—'}</span>
+                        <span className="pill text-xs"><User size={12} /> {r.seller_name || '—'}</span>
                       </div>
                     </td>
                     <td className="px-3 py-2">{r.product_name}</td>
-                    <td className="px-3 py-2 text-right">{r.quantity}</td>
-                    <td className="px-3 py-2 text-right text-emerald-300">{fmtBs(total)}</td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1 text-xs text-apple-gray-200">
-                        <MapPin size={12} /> {r.origin?.toUpperCase()}{r.district ? ` • ${r.district}` : ''}
+                        <MapPin size={12} /> {r.branch || '—'}
                       </div>
                     </td>
+                    <td className="px-3 py-2 text-right">{r.quantity}</td>
+                    <td className="px-3 py-2 text-right text-emerald-300">{fmtBs(total)}</td>
                     <td className="px-3 py-2 text-xs text-apple-gray-200">
                       <div>{r.customer_name || '—'}</div>
                       {r.customer_phone && <div className="text-apple-gray-400">{r.customer_phone}</div>}

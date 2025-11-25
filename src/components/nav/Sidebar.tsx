@@ -179,6 +179,7 @@ export const Sidebar: FC<SidebarProps> = ({
         { href: ROUTES.INVENTARIO, icon: <Package size={18} />, label: 'Stock y transferencias', shortcut: 'I', req: 'view:inventario' },
         { href: ROUTES.REGISTRO_ASESORES, icon: <UserPlus size={18} />, label: 'Registrar venta (asesor)', shortcut: '6', req: 'view:registro-asesores' },
         { href: ROUTES.REGISTRO_PROMOTORES, icon: <UserPlus size={18} />, label: 'Registrar venta (promotor)', req: 'view:registro-promotores' },
+        { href: ROUTES.VALIDACION_ASESORES, icon: <CheckCircle2 size={18} />, label: 'Validar ventas asesores', req: 'view:validacion-asesores' },
         { href: ROUTES.VALIDACION_PROMOTORES, icon: <CheckCircle2 size={18} />, label: 'Validar ventas promotores', req: 'view:validacion-promotores' },
         { href: ROUTES.DEVOLUCIONES, icon: <RotateCcw size={18} />, label: 'Gestión de devoluciones', shortcut: '4', req: 'view:devoluciones' },
       ],

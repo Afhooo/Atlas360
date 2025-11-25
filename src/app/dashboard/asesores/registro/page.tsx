@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Textarea } from '@/components/Textarea';
@@ -10,11 +9,10 @@ import { Label } from '@/components/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/select';
 import { Separator } from '@/components/separator';
 import { toast } from 'sonner';
-import { supabaseClient } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Loader2, Plus, Trash2, Search, CheckCircle, XCircle,
-  AlertTriangle, ArrowRight, Upload, User, CreditCard, Truck, ClipboardPaste, PackageSearch, Check,
+  AlertTriangle, User, CreditCard, Truck, ClipboardPaste, PackageSearch, Check,
   MapPin, ExternalLink, Copy
 } from 'lucide-react';
 
@@ -70,8 +68,6 @@ type PartialOrder = {
 
 const formatDate = (date: Date): string => date.toISOString().split('T')[0];
 const formatTime = (date: Date): string => date.toTimeString().slice(0, 5);
-
-const ORDER_MEDIA_BUCKET = process.env.NEXT_PUBLIC_ORDER_MEDIA_BUCKET || 'order-images';
 
 const getInitialOrderState = (
   sellerName = 'Vendedor',
@@ -136,7 +132,6 @@ const mapRoleToSellerRole = (
 };
 
 export default function CapturaPage() {
-  const [currentStep, setCurrentStep] = useState(1);
   const [order, setOrder] = useState<PartialOrder>(getInitialOrderState());
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -216,14 +211,13 @@ export default function CapturaPage() {
       it.product_name.trim() !== '' &&
       Number(it.quantity) > 0 &&
       Number(it.unit_price) > 0 &&
-      !!it.image_url &&
       it.is_recognized === true
     ), [order.items]);
 
+  // Ubicación obligatoria (dirección o URL normalizada)
   const isStep3Valid = useMemo(() =>
-    !!order.destino?.trim() &&
-    (!!order.normalized_address || !!order.address.trim())
-  , [order.destino, order.normalized_address, order.address]);
+    !!order.address.trim() || !!order.normalized_address
+  , [order.address, order.normalized_address]);
 
   const isStep4Valid = useMemo(() =>
     !!order.customer_name.trim() &&
@@ -386,64 +380,20 @@ export default function CapturaPage() {
     }
   };
 
-  // ---- CARGA DE IMAGEN ----
-  const handleImageUpload = async (idx: number, file: File) => {
-    updateItem(idx, { is_uploading_image: true });
-    let previewUrl: string | null = null;
-    try {
-      if (!ORDER_MEDIA_BUCKET) {
-        throw new Error('Bucket de almacenamiento no configurado');
-      }
-
-      previewUrl = URL.createObjectURL(file);
-      updateItem(idx, { image_url: previewUrl });
-
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '-').toLowerCase();
-      const uniqueId =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : Math.random().toString(36).slice(2);
-      const path = `orders/${new Date().toISOString().slice(0, 10)}/${uniqueId}-${baseName}.${ext}`;
-
-      const uploadRes = await supabaseClient.storage
-        .from(ORDER_MEDIA_BUCKET)
-        .upload(path, file, { cacheControl: '3600', upsert: true });
-      if (uploadRes.error) throw uploadRes.error;
-
-      const { data: publicData } = supabaseClient.storage
-        .from(ORDER_MEDIA_BUCKET)
-        .getPublicUrl(path);
-      if (!publicData?.publicUrl) throw new Error('No se pudo generar la URL pública de la imagen.');
-
-      updateItem(idx, { image_url: publicData.publicUrl });
-      toast.success('Foto subida');
-    } catch (err: any) {
-      console.error('Error subiendo foto de producto:', err);
-      toast.error(err?.message || 'No se pudo subir la foto del producto');
-      updateItem(idx, { image_url: null });
-    } finally {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      updateItem(idx, { is_uploading_image: false });
-    }
-  };
-
   // ---- SUBMIT (paso 5) ----
   const submitOrder = async () => {
     if (order.items.length === 0) return toast.error('Agrega al menos 1 producto.');
-    if (!order.destino?.trim()) return toast.error('Falta el destino (ciudad/zona).');
-    if (!(order.normalized_address || order.address?.trim())) return toast.error('Falta dirección.');
-    if (!order.customer_name?.trim() || !order.customer_phone?.trim()) {
-      return toast.error('Faltan datos del cliente.');
-    }
+    if (!order.customer_phone?.trim()) return toast.error('Falta el número del cliente.');
+    if (!order.customer_name?.trim()) return toast.error('Falta el nombre del cliente.');
+    if (!(order.normalized_address || order.address?.trim())) return toast.error('Falta la ubicación (dirección o URL).');
+
     const invalidItem = order.items.find(it =>
       !it.product_name?.trim() ||
       Number(it.quantity) <= 0 ||
       Number(it.unit_price) <= 0 ||
-      it.is_recognized !== true ||
-      !it.image_url
+      it.is_recognized !== true
     );
-    if (invalidItem) return toast.error('Revisa productos: nombre/cantidad/precio/foto/normalización.');
+    if (invalidItem) return toast.error('Revisa productos: nombre/cantidad/precio/normalización.');
 
     const payTotal = order.payments.reduce((s, p) => s + Number(p.amount || 0), 0);
     const productsTotal = order.items.reduce((s, it) => s + Number(it.quantity) * Number(it.unit_price), 0);
@@ -508,7 +458,6 @@ export default function CapturaPage() {
 
       toast.success(`✅ Pedido #${data.order_no ?? 'creado'} guardado con éxito`);
       setOrder(getInitialOrderState(order.seller_name, order.seller_role, order.sales_user_id));
-      setCurrentStep(1);
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar');
     } finally {
@@ -521,844 +470,450 @@ export default function CapturaPage() {
   const [localPhone, setLocalPhone] = useState('');
 
   useEffect(() => {
-    if (currentStep === 4) {
-      setLocalName(order.customer_name || '');
-      setLocalPhone(order.customer_phone || '');
-    }
-  }, [currentStep, order.customer_name, order.customer_phone]);
+    setLocalName(order.customer_name || '');
+    setLocalPhone(order.customer_phone || '');
+  }, [order.customer_name, order.customer_phone]);
 
-  // ---- UI ----
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto max-w-5xl px-6 py-8 space-y-8">
-        {/* Header */}
-        <motion.div 
-          className="space-y-6 text-center"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
+      <div className="container mx-auto max-w-6xl px-6 py-10 space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight mb-2">
-              Captura de Pedidos
-            </h1>
-            <p className="text-white/60 text-lg">
-              Vendedor: <span className="font-semibold text-blue-400">{order.seller_name}</span>
-            </p>
+            <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">Registro de ventas (asesoras)</h1>
+            <p className="text-white/60 text-lg">Vendedor: <span className="font-semibold text-blue-400">{order.seller_name}</span></p>
           </div>
-          
-          {/* Progress Steps */}
-          <div className="flex items-center justify-center gap-2 sm:gap-4 max-w-3xl mx-auto">
-            {[1,2,3,4].map((step, i) => (
-              <motion.div 
-                key={step} 
-                className="flex items-center flex-grow"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-              >
-                <motion.div 
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 border-2 backdrop-blur-sm ${
-                    step <= currentStep
-                      ? 'bg-gradient-to-r from-blue-500/30 to-blue-600/30 border-blue-500/50 text-white shadow-lg shadow-blue-900/30'
-                      : 'bg-white/10 border-white/20 text-white/60'
-                  }`}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  {step}
-                </motion.div>
-                {i < 3 && (
-                  <div className={`flex-1 h-0.5 mx-2 transition-all duration-300 ${
-                    step < currentStep ? 'bg-blue-500' : 'bg-white/20'
-                  }`} />
-                )}
-              </motion.div>
-            ))}
+          <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/80">
+            Total estimado: <span className="font-semibold text-green-300">Bs. {total.toFixed(2)}</span>
           </div>
-        </motion.div>
+        </div>
+        <p className="text-white/50">Completa productos normalizados, ubicación obligatoria, datos de cliente y pago en una sola vista.</p>
 
-        <AnimatePresence mode="wait">
-          {/* PASO 1 */}
-          {currentStep === 1 && (
-            <motion.div
-              key="step2"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.5 }}
-              className="relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl"></div>
-              <Card className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl">
-                <CardHeader>
-                  <CardTitle className="text-2xl text-white flex items-center gap-3 p-6">
-                    <div className="p-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-lg">
-                      <PackageSearch className="w-6 h-6 text-green-400" />
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Productos */}
+            <section className="rounded-2xl bg-white/5 border border-white/10 p-6 space-y-6 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-500/15 border border-green-500/30 rounded-lg">
+                  <PackageSearch className="w-5 h-5 text-green-300" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-semibold">Productos</h2>
+                  <p className="text-white/60 text-sm">Busca, selecciona y confirma cantidad y precio.</p>
+                </div>
+              </div>
+
+              {order.items.length === 0 && (
+                <div className="p-5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-center space-y-3">
+                  <p>No hay productos agregados.</p>
+                  <Button
+                    onClick={addEmptyItem}
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500/30 to-green-600/30 border border-green-500/30 text-white hover:from-green-500/40 hover:to-green-600/40 transition-all"
+                  >
+                    <Plus className="w-4 h-4" /> Añadir producto
+                  </Button>
+                </div>
+              )}
+
+              <AnimatePresence>
+                {order.items.map((it, idx) => (
+                  <motion.div 
+                    key={idx} 
+                    className="rounded-xl bg-white/5 border border-white/10 p-5 space-y-4"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.25, delay: idx * 0.05 }}
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="md:col-span-2 space-y-2">
+                        <Label className="text-white/70 font-medium">Producto</Label>
+                        <Input
+                          value={it.product_name ?? ''}
+                          placeholder="Ej: soporte de celular..."
+                          className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            updateItem(idx, { product_name: v, original_name: v, product_code: null, is_recognized: null, similar_options: [] });
+                            makeDebouncedSimilarUpdater(idx)(v);
+                          }}
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-all"
+                            onClick={async () => {
+                              const opts = await fetchSimilar(it.product_name);
+                              updateItem(idx, { similar_options: opts, is_recognized: opts.length ? false : null });
+                            }}
+                          >
+                            <Search className="w-4 h-4 mr-1" /> Buscar en inventario
+                          </Button>
+                          {it.product_code && (
+                            <span className="text-xs rounded-full px-3 py-1 bg-green-500/20 border border-green-500/30 text-green-300">
+                              Normalizado: {it.product_code}
+                            </span>
+                          )}
+                        </div>
+
+                        {Array.isArray(it.similar_options) && it.similar_options.length > 0 && (
+                          <div className="mt-3 p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
+                            <p className="text-sm text-white/70">Selecciona el producto correcto:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {it.similar_options.map((opt, j) => (
+                                <button
+                                  key={j}
+                                  onClick={() =>
+                                    updateItem(idx, {
+                                      product_name: opt.name,
+                                      product_code: opt.code,
+                                      is_recognized: true,
+                                      similar_options: [],
+                                    })
+                                  }
+                                  className="px-3 py-2 rounded-lg text-sm bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-all"
+                                  title={opt.code || ''}
+                                >
+                                  {opt.name}{opt.code && ` (${opt.code})`}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-white/70 font-medium">Cantidad</Label>
+                        <Input
+                          type="text"
+                          defaultValue={String(it.quantity ?? '')}
+                          onBlur={(e) => updateItem(idx, { quantity: Number(e.target.value.replace(',', '.')) || 0 })}
+                          className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-white/70 font-medium">Precio Unitario</Label>
+                        <Input
+                          type="text"
+                          defaultValue={String(it.unit_price ?? '')}
+                          onBlur={(e) => updateItem(idx, { unit_price: Number(e.target.value.replace(',', '.')) || 0 })}
+                          className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
+                        />
+                      </div>
                     </div>
-                    Paso 1: Revisar y Normalizar Productos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 pt-0 space-y-6">
-                  <div className="space-y-2 text-white/70">
-                    <p>Registra los productos directamente desde el inventario. Cada item debe quedar con nombre homologado, código, foto y precio confirmado antes de avanzar.</p>
-                    <p className="text-white/50 text-sm">Utiliza el buscador para evitar discrepancias y mantén todos los campos completos.</p>
-                  </div>
-                  {order.items.length === 0 && (
-                    <motion.div 
-                      className="p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-white/70 text-center space-y-4"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <p>No hay productos registrados todavía. Añade uno y normalízalo desde la tarjeta del producto.</p>
-                      <div className="flex justify-center">
+
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        {it.is_recognized === true && (
+                          <span className="text-green-400 inline-flex items-center gap-1">
+                            <Check className="w-4 h-4" /> Normalizado
+                          </span>
+                        )}
+                        {it.is_recognized !== true && it.similar_options.length === 0 && (
+                          <span className="text-yellow-400 inline-flex items-center gap-1">
+                            <AlertTriangle className="w-4 h-4" /> Falta normalizar
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
                         <Button
-                          onClick={addEmptyItem}
-                          className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500/30 to-green-600/30 backdrop-blur-sm border border-green-500/30 text-white hover:from-green-500/40 hover:to-green-600/40 transition-all"
+                          type="button"
+                          variant={it.sale_type === 'RETAIL' ? 'default' : 'outline'}
+                          className={it.sale_type === 'RETAIL'
+                            ? 'bg-gradient-to-r from-green-500/30 to-green-600/30 border border-green-500/30 text-white'
+                            : 'bg-white/10 border border-white/20 text-white hover:bg-white/20'}
+                          onClick={() => updateItem(idx, { sale_type: 'RETAIL' })}
                         >
-                          <Plus className="w-4 h-4" /> Añadir primer producto
+                          <User className="w-4 h-4 mr-1" /> Minorista
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={it.sale_type === 'WHOLESALE' ? 'default' : 'outline'}
+                          className={it.sale_type === 'WHOLESALE'
+                            ? 'bg-gradient-to-r from-blue-500/30 to-blue-600/30 border border-blue-500/30 text-white'
+                            : 'bg-white/10 border border-white/20 text-white hover:bg-white/20'}
+                          onClick={() => updateItem(idx, { sale_type: 'WHOLESALE' })}
+                        >
+                          <PackageSearch className="w-4 h-4 mr-1" /> Mayorista
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          onClick={() => removeItem(idx)}
+                          className="bg-red-500/20 border border-red-500/30 text-red-300 hover:bg-red-500/30"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
-                    </motion.div>
-                  )}
-
-                  <AnimatePresence>
-                    {order.items.map((it, idx) => (
-                      <motion.div 
-                        key={idx} 
-                        className="relative"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.3, delay: idx * 0.1 }}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/10 rounded-xl"></div>
-                        <div className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-6 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="md:col-span-2">
-                              <Label className="text-white/70 font-medium mb-2 block">Producto</Label>
-                              <Input
-                                value={it.product_name ?? ''}
-                                placeholder="Ej: soporte de celular one…"
-                                className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  updateItem(idx, { product_name: v, original_name: v, product_code: null, is_recognized: null, similar_options: [] });
-                                  makeDebouncedSimilarUpdater(idx)(v);
-                                }}
-                              />
-                              <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-all"
-                                    onClick={async () => {
-                                      const opts = await fetchSimilar(it.product_name);
-                                      updateItem(idx, { similar_options: opts, is_recognized: opts.length ? false : null });
-                                    }}
-                                  >
-                                    <Search className="w-4 h-4 mr-1" /> Buscar en inventario
-                                  </Button>
-                                </motion.div>
-                                {it.product_code && (
-                                  <motion.span 
-                                    className="text-xs rounded-full px-3 py-1 bg-green-500/20 backdrop-blur-sm border border-green-500/30 text-green-300"
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                  >
-                                    Normalizado: {it.product_code}
-                                  </motion.span>
-                                )}
-                              </div>
-
-                              {Array.isArray(it.similar_options) && it.similar_options.length > 0 && (
-                                <motion.div 
-                                  className="mt-4 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10"
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                >
-                                  <p className="text-sm text-white/70 mb-3">Selecciona el producto correcto:</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {it.similar_options.map((opt, j) => (
-                                      <motion.button
-                                        key={j}
-                                        onClick={() =>
-                                          updateItem(idx, {
-                                            product_name: opt.name,
-                                            product_code: opt.code,
-                                            is_recognized: true,
-                                            similar_options: [],
-                                          })
-                                        }
-                                        className="px-3 py-2 rounded-lg text-sm bg-white/10 backdrop-blur-sm hover:bg-white/20 border border-white/20 text-white flex items-center gap-2 transition-all"
-                                        title={opt.code || ''}
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                      >
-                                        {opt.image_url && (
-                                          <Image
-                                            src={opt.image_url}
-                                            alt={`${opt.name} sugerido`}
-                                            width={24}
-                                            height={24}
-                                            className="w-6 h-6 rounded object-cover"
-                                          />
-                                        )}
-                                        <span>{opt.name}</span>
-                                        {opt.code && <span className="opacity-70">({opt.code})</span>}
-                                      </motion.button>
-                                    ))}
-                                  </div>
-                                </motion.div>
-                              )}
-                            </div>
-
-                            <div>
-                              <Label className="text-white/70 font-medium mb-2 block">Cantidad</Label>
-                              <Input
-                                type="text"
-                                defaultValue={String(it.quantity ?? '')}
-                                onBlur={(e) => updateItem(idx, { quantity: Number(e.target.value.replace(',', '.')) || 0 })}
-                                className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
-                              />
-                            </div>
-
-                            <div>
-                              <Label className="text-white/70 font-medium mb-2 block">Precio Unitario</Label>
-                              <Input
-                                type="text"
-                                defaultValue={String(it.unit_price ?? '')}
-                                onBlur={(e) => updateItem(idx, { unit_price: Number(e.target.value.replace(',', '.')) || 0 })}
-                                className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <Label className="text-white/70 font-medium mb-2 block">Tipo de Venta</Label>
-                              <div className="flex gap-2 mt-1">
-                                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                                  <Button
-                                    type="button"
-                                    variant={it.sale_type === 'RETAIL' ? 'default' : 'outline'}
-                                    className={it.sale_type === 'RETAIL'
-                                      ? 'bg-gradient-to-r from-green-500/30 to-green-600/30 backdrop-blur-sm border border-green-500/30 text-white hover:from-green-500/40 hover:to-green-600/40'
-                                      : 'bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20'}
-                                    onClick={() => updateItem(idx, { sale_type: 'RETAIL' })}
-                                  >
-                                    <User className="w-4 h-4 mr-1" /> Minorista
-                                  </Button>
-                                </motion.div>
-                                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                                  <Button
-                                    type="button"
-                                    variant={it.sale_type === 'WHOLESALE' ? 'default' : 'outline'}
-                                    className={it.sale_type === 'WHOLESALE'
-                                      ? 'bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white hover:from-blue-500/40 hover:to-blue-600/40'
-                                      : 'bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20'}
-                                    onClick={() => updateItem(idx, { sale_type: 'WHOLESALE' })}
-                                  >
-                                    <PackageSearch className="w-4 h-4 mr-1" /> Mayorista
-                                  </Button>
-                                </motion.div>
-                              </div>
-                            </div>
-
-                            <div>
-                              <Label className="text-white/70 font-medium mb-2 block">Foto del Producto (obligatoria)</Label>
-                              <div className="flex items-center gap-3 mt-1">
-                                <motion.label 
-                                  className="cursor-pointer"
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                >
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={(e) => e.target.files && handleImageUpload(idx, e.target.files[0])}
-                                  />
-                                  <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 transition-all">
-                                    {it.is_uploading_image ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                                    {it.is_uploading_image ? 'Subiendo…' : 'Subir Foto'}
-                                  </span>
-                                </motion.label>
-                                {it.image_url && (
-                                  <motion.span 
-                                    className="text-green-400 flex items-center gap-1"
-                                    initial={{ opacity: 0, scale: 0.8 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                  >
-                                    <CheckCircle className="w-4 h-4" /> Foto lista
-                                  </motion.span>
-                                )}
-                              </div>
-                              {it.image_url && (
-                                <motion.img 
-                                  src={it.image_url} 
-                                  alt="" 
-                                  className="mt-3 w-32 h-24 object-cover rounded-lg border border-white/20"
-                                  initial={{ opacity: 0, scale: 0.8 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                />
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between mt-4">
-                            <div className="flex items-center gap-2 text-sm">
-                              {it.is_recognized === true && (
-                                <motion.span 
-                                  className="text-green-400 inline-flex items-center gap-1"
-                                  initial={{ opacity: 0, scale: 0.8 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                >
-                                  <Check className="w-4 h-4" /> Normalizado
-                                </motion.span>
-                              )}
-                              {it.is_recognized !== true && it.similar_options.length === 0 && (
-                                <span className="text-yellow-400 inline-flex items-center gap-1">
-                                  <AlertTriangle className="w-4 h-4" /> Busca en inventario o escribe para sugerencias
-                                </span>
-                              )}
-                            </div>
-                            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                              <Button 
-                                variant="destructive" 
-                                size="sm" 
-                                onClick={() => removeItem(idx)}
-                                className="bg-red-500/20 backdrop-blur-sm border border-red-500/30 text-red-300 hover:bg-red-500/30"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </motion.div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button
-                      onClick={addEmptyItem}
-                      className="w-full bg-gradient-to-r from-green-500/30 to-green-600/30 backdrop-blur-sm border border-green-500/30 text-white font-bold text-base py-4 rounded-xl hover:from-green-500/40 hover:to-green-600/40 transition-all duration-300 flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-5 h-5" /> {order.items.length > 0 ? 'Añadir otro producto' : 'Añadir producto'}
-                    </Button>
-                  </motion.div>
-
-                  <motion.div 
-                    className="flex justify-between items-center text-xl font-bold text-white mt-6 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    <span>Total Estimado:</span>
-                    <span className="text-green-400">Bs. {total.toFixed(2)}</span>
-                  </motion.div>
-
-                  <div className="flex gap-4 mt-6 justify-end">
-                    <motion.div className="w-full sm:w-2/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        onClick={() => setCurrentStep(2)} 
-                        disabled={!isStep2Valid}
-                        className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white font-bold text-base py-3 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
-                      >
-                        Continuar a Entrega <ArrowRight size={16} />
-                      </Button>
-                    </motion.div>
-                  </div>
-
-                  {!isStep2Valid && (
-                    <motion.div 
-                      className="mt-4 p-4 bg-red-500/20 backdrop-blur-sm border border-red-500/30 rounded-xl text-red-300 flex items-center"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <AlertTriangle className="w-5 h-5 mr-2" /> 
-                      Completa cantidad, precio, <u>foto</u> y <u>normalización</u> de cada producto.
-                    </motion.div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* PASO 2 */}
-          {currentStep === 2 && (
-            <motion.div
-              key="step3"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.5 }}
-              className="relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl"></div>
-              <Card className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl">
-                <CardHeader>
-                  <CardTitle className="text-2xl text-white flex items-center gap-3 p-6">
-                    <div className="p-2 bg-orange-500/20 backdrop-blur-sm border border-orange-500/30 rounded-lg">
-                      <Truck className="w-6 h-6 text-orange-400" />
                     </div>
-                    Paso 2: Detalles de Entrega
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 pt-0 space-y-6">
-                  <div>
-                    <Label className="text-white/70 font-medium mb-2 block">Dirección / URL de Google Maps</Label>
-                    <Input 
-                      value={order.address} 
-                      onChange={e => setOrder(p => ({ ...p, address: e.target.value }))} 
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all" 
-                      placeholder="Av. … o URL de Google Maps"
-                    />
-                  </div>
-                  
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button 
-                      onClick={handleGeocodeAddress} 
-                      disabled={isGeocoding || order.address.trim().length < 5}
-                      className="w-full bg-gradient-to-r from-purple-500/30 to-purple-600/30 backdrop-blur-sm border border-purple-500/30 text-white font-bold text-base py-4 rounded-xl hover:from-purple-500/40 hover:to-purple-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
-                    >
-                      {isGeocoding ? (
-                        <>
-                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                          Verificando…
-                        </>
-                      ) : (
-                        <>
-                          <Search className="w-5 h-5" />
-                          Verificar Dirección
-                        </>
-                      )}
-                    </Button>
                   </motion.div>
-                  
-                  {geocodeMsg && (
-                    <motion.div 
-                      className={`p-4 rounded-xl flex items-center gap-3 backdrop-blur-sm border ${
-                        geocodeMsg.ok 
-                          ? 'bg-green-500/20 border-green-500/30 text-green-300' 
-                          : 'bg-red-500/20 border-red-500/30 text-red-300'
-                      }`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      {geocodeMsg.ok ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
-                      <span className="flex-1">{geocodeMsg.msg}</span>
-                    </motion.div>
-                  )}
+                ))}
+              </AnimatePresence>
 
-                  {order.normalized_address && (
-                    <motion.div
-                      className="p-5 rounded-xl bg-white/5 border border-white/15 backdrop-blur-sm text-white/90"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <div className="flex flex-col gap-4">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                          <div className="flex items-start gap-3">
-                            <div className="p-2 bg-green-500/20 border border-green-500/30 rounded-lg">
-                              <MapPin className="w-5 h-5 text-green-300" />
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-white font-semibold">Dirección normalizada</span>
-                                {order.normalized_source && (
-                                  <span className="px-2 py-0.5 text-xs uppercase tracking-wide rounded-full bg-white/10 border border-white/20 text-white/70">
-                                    {order.normalized_source === 'opencage' ? 'OpenCage' : order.normalized_source === 'nominatim' ? 'OpenStreetMap' : 'Coordenadas'}
-                                  </span>
-                                )}
-                                {typeof order.normalized_confidence === 'number' && (
-                                  <span className="text-xs text-white/60">
-                                    Confianza {Math.round(order.normalized_confidence)}/10
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-white/80 leading-relaxed break-words">
-                                {order.normalized_address}
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                                  onClick={() => handleCopyToClipboard(order.normalized_address || '', 'Dirección copiada')}
-                                >
-                                  <Copy className="w-4 h-4 mr-2" /> Copiar dirección
-                                </Button>
-                                {mapUrl && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                                    onClick={() => window.open(mapUrl, '_blank', 'noopener,noreferrer')}
-                                  >
-                                    <ExternalLink className="w-4 h-4 mr-2" /> Abrir en Maps
-                                  </Button>
-                                )}
-                                {order.lat !== undefined && order.lng !== undefined && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                                    onClick={() => handleCopyToClipboard(`${order.lat},${order.lng}`, 'Coordenadas copiadas')}
-                                  >
-                                    <ClipboardPaste className="w-4 h-4 mr-2" /> Copiar coordenadas
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={addEmptyItem}
+                  className="w-full bg-gradient-to-r from-green-500/30 to-green-600/30 border border-green-500/30 text-white font-semibold py-3 rounded-xl hover:from-green-500/40 hover:to-green-600/40 transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-5 h-5" /> {order.items.length > 0 ? 'Añadir otro producto' : 'Añadir producto'}
+                </Button>
+                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/10">
+                  <span className="text-white/70">Total estimado</span>
+                  <span className="text-green-400 font-semibold">Bs. {total.toFixed(2)}</span>
+                </div>
+                {!isStep2Valid && (
+                  <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Completa cantidad, precio y normalización de cada producto.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Cliente */}
+            <section className="rounded-2xl bg-white/5 border border-white/10 p-6 space-y-6 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-500/15 border border-purple-500/30 rounded-lg">
+                  <User className="w-5 h-5 text-purple-300" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-semibold">Cliente</h2>
+                  <p className="text-white/60 text-sm">Nombre y teléfono obligatorios.</p>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-white/70 font-medium">Nombre</Label>
+                  <input 
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all" 
+                    defaultValue={localName}
+                    onChange={e => setLocalName(e.target.value)}
+                    onBlur={e => setOrder(p => ({ ...p, customer_name: e.target.value.trim() }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-white/70 font-medium">Teléfono</Label>
+                  <input 
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all" 
+                    defaultValue={localPhone}
+                    onChange={e => setLocalPhone(e.target.value)}
+                    onBlur={e => setOrder(p => ({ ...p, customer_phone: normalizePhone(e.target.value) }))}
+                  />
+                </div>
+              </div>
+              {!isStep4Valid && (
+                <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  Nombre y teléfono son obligatorios.
+                </div>
+              )}
+            </section>
+          </div>
+
+          <div className="space-y-6">
+            {/* Ubicación */}
+            <section id="ubicacion-card" className="rounded-2xl bg-white/5 border border-white/10 p-6 space-y-6 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-500/15 border border-orange-500/30 rounded-lg">
+                  <Truck className="w-5 h-5 text-orange-300" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Ubicación</h2>
+                  <p className="text-white/60 text-sm">Dirección o URL de Maps (obligatoria).</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Input 
+                  value={order.address} 
+                  onChange={e => setOrder(p => ({ ...p, address: e.target.value }))} 
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all" 
+                  placeholder="Av. … o URL de Google Maps"
+                />
+                <Button 
+                  onClick={handleGeocodeAddress} 
+                  disabled={isGeocoding || order.address.trim().length < 5}
+                  className="w-full bg-gradient-to-r from-purple-500/30 to-purple-600/30 border border-purple-500/30 text-white font-semibold py-3 rounded-xl hover:from-purple-500/40 hover:to-purple-600/40 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                >
+                  {isGeocoding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  {isGeocoding ? 'Verificando…' : 'Verificar dirección'}
+                </Button>
+
+                {geocodeMsg && (
+                  <div className={`p-3 rounded-xl flex items-center gap-2 border ${
+                    geocodeMsg.ok ? 'bg-green-500/15 border-green-500/30 text-green-200' : 'bg-red-500/15 border-red-500/30 text-red-200'
+                  }`}>
+                    {geocodeMsg.ok ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    <span className="flex-1 text-sm">{geocodeMsg.msg}</span>
+                  </div>
+                )}
+
+                {order.normalized_address && (
+                  <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                    <div className="flex items-start gap-2 text-sm">
+                      <MapPin className="w-4 h-4 text-green-300 mt-0.5" />
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <span className="font-semibold text-white">Dirección normalizada</span>
+                          {order.normalized_source && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-white/10 border border-white/20 text-white/70">
+                              {order.normalized_source === 'opencage' ? 'OpenCage' : order.normalized_source === 'nominatim' ? 'OpenStreetMap' : 'Coordenadas'}
+                            </span>
+                          )}
+                          {typeof order.normalized_confidence === 'number' && (
+                            <span className="text-xs text-white/60">Confianza {Math.round(order.normalized_confidence)}/10</span>
+                          )}
                         </div>
-
-                        {normalizedDetailEntries.length > 0 && (
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            {normalizedDetailEntries.map(detail => (
-                              <div
-                                key={`${detail.label}-${detail.value}`}
-                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2"
-                              >
-                                <span className="block text-xs uppercase tracking-wide text-white/50">{detail.label}</span>
-                                <span className="block text-sm text-white font-medium leading-tight">{detail.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        <p className="text-white/80 leading-relaxed break-words">{order.normalized_address}</p>
                       </div>
-                    </motion.div>
-                  )}
-
-                  <div>
-                    <Label className="text-white/70 font-medium mb-2 block">Destino (Ciudad/Zona)</Label>
-                    <Input 
-                      value={order.destino} 
-                      onChange={e => setOrder(p => ({ ...p, destino: e.target.value }))} 
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
-                    />
-                  </div>
-
-                  <div>
-                    <Label className="text-white/70 font-medium mb-2 block">Fecha de Entrega</Label>
-                    <Input 
-                      type="date" 
-                      value={order.delivery_date} 
-                      onChange={e => setOrder(p => ({ ...p, delivery_date: e.target.value }))} 
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-white/70 font-medium mb-2 block">Hora Desde</Label>
-                      <Input 
-                        type="time" 
-                        value={order.delivery_from} 
-                        onChange={e => setOrder(p => ({ ...p, delivery_from: e.target.value }))} 
-                        className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
-                      />
                     </div>
-                    <div>
-                      <Label className="text-white/70 font-medium mb-2 block">Hora Hasta</Label>
-                      <Input 
-                        type="time" 
-                        value={order.delivery_to} 
-                        onChange={e => setOrder(p => ({ ...p, delivery_to: e.target.value }))} 
-                        className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all"
-                      />
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20" onClick={() => handleCopyToClipboard(order.normalized_address || '', 'Dirección copiada')}>
+                        <Copy className="w-4 h-4 mr-2" /> Copiar
+                      </Button>
+                      {mapUrl && (
+                        <Button variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20" onClick={() => window.open(mapUrl, '_blank', 'noopener,noreferrer')}>
+                          <ExternalLink className="w-4 h-4 mr-2" /> Abrir en Maps
+                        </Button>
+                      )}
+                      {order.lat !== undefined && order.lng !== undefined && (
+                        <Button variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20" onClick={() => handleCopyToClipboard(`${order.lat},${order.lng}`, 'Coordenadas copiadas')}>
+                          <ClipboardPaste className="w-4 h-4 mr-2" /> Copiar coord.
+                        </Button>
+                      )}
                     </div>
                   </div>
+                )}
 
-                  <div className="flex items-center gap-3">
-                    <input 
-                      type="checkbox" 
-                      id="isEncomienda" 
-                      checked={order.is_encomienda} 
-                      onChange={e => setOrder(p => ({ ...p, is_encomienda: e.target.checked }))} 
-                      className="w-5 h-5 rounded bg-white/10 border border-white/20 text-blue-500 focus:ring-blue-500/50"
-                    />
-                    <Label htmlFor="isEncomienda" className="text-white font-medium">Es Encomienda</Label>
+                <div className="space-y-2">
+                  <Label className="text-white/70 font-medium">Notas</Label>
+                  <Textarea 
+                    rows={3} 
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all resize-none" 
+                    value={order.notes} 
+                    onChange={e => setOrder(p => ({ ...p, notes: e.target.value }))}
+                  />
+                </div>
+
+                {!isStep3Valid && (
+                  <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Ingresa una dirección o URL válida y verifícala.
                   </div>
+                )}
+              </div>
+            </section>
 
-                  <div>
-                    <Label className="text-white/70 font-medium mb-2 block">Notas</Label>
-                    <Textarea 
-                      rows={3} 
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all resize-none" 
-                      value={order.notes} 
-                      onChange={e => setOrder(p => ({ ...p, notes: e.target.value }))}
-                    />
-                  </div>
+            {/* Pago y resumen */}
+            <section className="rounded-2xl bg-white/5 border border-white/10 p-6 space-y-6 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-500/15 border border-green-500/30 rounded-lg">
+                  <CreditCard className="w-5 h-5 text-green-300" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Pago y confirmación</h2>
+                  <p className="text-white/60 text-sm">Un método de pago por ahora.</p>
+                </div>
+              </div>
 
-                  <div className="flex gap-4 mt-6">
-                    <motion.div className="w-full sm:w-1/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setCurrentStep(1)} 
-                        className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 py-3"
-                      >
-                        Volver
-                      </Button>
-                    </motion.div>
-                    <motion.div className="w-full sm:w-2/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        onClick={() => setCurrentStep(3)} 
-                        disabled={!isStep3Valid}
-                        className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white font-bold text-base py-3 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                      >
-                        Continuar a Cliente
-                      </Button>
-                    </motion.div>
-                  </div>
-
-                  {!isStep3Valid && (
-                    <motion.div 
-                      className="mt-4 p-4 bg-red-500/20 backdrop-blur-sm border border-red-500/30 rounded-xl text-red-300 flex items-center"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
+              <AnimatePresence>
+                {order.payments.map((p, i) => (
+                  <motion.div 
+                    key={i} 
+                    className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-4"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                  >
+                    <Select 
+                      value={p.method} 
+                      onValueChange={(v) => setOrder(prev => ({
+                        ...prev, 
+                        payments: prev.payments.map((x, ix) => ix === i ? { ...x, method: v as any } : x)
+                      }))}
                     >
-                      <AlertTriangle className="w-5 h-5 mr-2" /> 
-                      Completa destino y verifica la dirección.
-                    </motion.div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* PASO 3 */}
-          {currentStep === 3 && (
-            <motion.div
-              key="step4"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.5 }}
-              className="relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl"></div>
-              <Card className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl">
-                <CardHeader>
-                  <CardTitle className="text-2xl text-white flex items-center gap-3 p-6">
-                    <div className="p-2 bg-purple-500/20 backdrop-blur-sm border border-purple-500/30 rounded-lg">
-                      <User className="w-6 h-6 text-purple-400" />
-                    </div>
-                    Paso 3: Datos del Cliente
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 pt-0 space-y-6">
-                  <div>
-                    <Label className="text-white/70 font-medium mb-2 block">Nombre del Cliente</Label>
-                    <input 
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all" 
-                      defaultValue={localName}
-                      onChange={e => setLocalName(e.target.value)}
-                      onBlur={e => setOrder(p => ({ ...p, customer_name: e.target.value.trim() }))}
+                      <SelectTrigger className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all">
+                        <SelectValue placeholder="Método" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-black border border-white/20 text-white">
+                        <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                        <SelectItem value="QR">QR</SelectItem>
+                        <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input 
+                      type="text" 
+                      defaultValue={String(p.amount ?? '')}
+                      onBlur={(e) => setOrder(prev => ({
+                        ...prev, 
+                        payments: prev.payments.map((x, ix) => ix === i ? { ...x, amount: Number(e.target.value.replace(',', '.')) || 0 } : x)
+                      }))}
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all" 
+                      placeholder="Monto"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-white/70 font-medium mb-2 block">Teléfono del Cliente</Label>
-                    <input 
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all" 
-                      defaultValue={localPhone}
-                      onChange={e => setLocalPhone(e.target.value)}
-                      onBlur={e => setOrder(p => ({ ...p, customer_phone: normalizePhone(e.target.value) }))}
-                    />
-                  </div>
-
-                  <div className="flex gap-4 mt-6">
-                    <motion.div className="w-full sm:w-1/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setCurrentStep(2)} 
-                        className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 py-3"
-                      >
-                        Volver
-                      </Button>
-                    </motion.div>
-                    <motion.div className="w-full sm:w-2/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        onClick={() => setCurrentStep(4)} 
-                        disabled={!isStep4Valid}
-                        className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white font-bold text-base py-3 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                      >
-                        Continuar a Pagos
-                      </Button>
-                    </motion.div>
-                  </div>
-
-                  {!isStep4Valid && (
-                    <motion.div 
-                      className="mt-4 p-4 bg-red-500/20 backdrop-blur-sm border border-red-500/30 rounded-xl text-red-300 flex items-center"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <AlertTriangle className="w-5 h-5 mr-2" /> 
-                      Nombre, CI/NIT y Teléfono son obligatorios.
-                    </motion.div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* PASO 4 */}
-          {currentStep === 4 && (
-            <motion.div
-              key="step5"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.5 }}
-              className="relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/10 rounded-2xl"></div>
-              <Card className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-2xl">
-                <CardHeader>
-                  <CardTitle className="text-2xl text-white flex items-center gap-3 p-6">
-                    <div className="p-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-lg">
-                      <CreditCard className="w-6 h-6 text-green-400" />
-                    </div>
-                    Paso 4: Pagos y Resumen
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 pt-0 space-y-6">
-                  <h3 className="text-xl font-semibold text-white">Métodos de Pago</h3>
-
-                  <AnimatePresence>
-                    {order.payments.map((p, i) => (
-                      <motion.div 
-                        key={i} 
-                        className="flex items-center gap-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <Select 
-                          value={p.method} 
-                          onValueChange={(v) => setOrder(prev => ({
-                            ...prev, 
-                            payments: prev.payments.map((x, ix) => ix === i ? { ...x, method: v as any } : x)
-                          }))}
-                        >
-                          <SelectTrigger className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all">
-                            <SelectValue placeholder="Método" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-black border border-white/20 text-white">
-                            <SelectItem value="EFECTIVO">Efectivo</SelectItem>
-                            <SelectItem value="QR">QR</SelectItem>
-                            <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input 
-                          type="text" 
-                          defaultValue={String(p.amount ?? '')}
-                          onBlur={(e) => setOrder(prev => ({
-                            ...prev, 
-                            payments: prev.payments.map((x, ix) => ix === i ? { ...x, amount: Number(e.target.value.replace(',', '.')) || 0 } : x)
-                          }))}
-                          className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400/50 transition-all" 
-                          placeholder="Monto"
-                        />
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            onClick={() => setOrder(prev => ({ ...prev, payments: prev.payments.filter((_, ix) => ix !== i) }))}
-                            className="bg-red-500/20 backdrop-blur-sm border border-red-500/30 text-red-300 hover:bg-red-500/30"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </motion.div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button 
-                      onClick={() => {
-                        const productsTotal = order.items.reduce((s, it) => s + Number(it.quantity) * Number(it.unit_price), 0);
-                        if (order.payments.length >= 1) return toast.error('Por ahora solo 1 método de pago.');
-                        setOrder(p => ({ ...p, payments: [...p.payments, { method: 'EFECTIVO', amount: productsTotal }] }));
-                      }}
-                      className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 backdrop-blur-sm border border-blue-500/30 text-white font-bold text-base py-4 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 transition-all duration-300 flex items-center justify-center gap-2"
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={() => setOrder(prev => ({ ...prev, payments: prev.payments.filter((_, ix) => ix !== i) }))}
+                      className="bg-red-500/20 border border-red-500/30 text-red-300 hover:bg-red-500/30"
                     >
-                      <Plus className="w-5 h-5" /> Añadir Pago (auto = total)
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </motion.div>
+                ))}
+              </AnimatePresence>
 
-                  <motion.div 
-                    className="flex justify-between items-center text-xl font-bold text-white mt-6 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    <span>Total a Pagar:</span>
-                    <span className="text-green-400">Bs. {order.payments.reduce((s, p) => s + Number(p.amount || 0), 0).toFixed(2)}</span>
-                  </motion.div>
+              <Button 
+                onClick={() => {
+                  const productsTotal = order.items.reduce((s, it) => s + Number(it.quantity) * Number(it.unit_price), 0);
+                  if (order.payments.length >= 1) return toast.error('Por ahora solo 1 método de pago.');
+                  setOrder(p => ({ ...p, payments: [...p.payments, { method: 'EFECTIVO', amount: productsTotal }] }));
+                }}
+                className="w-full bg-gradient-to-r from-blue-500/30 to-blue-600/30 border border-blue-500/30 text-white font-semibold py-3 rounded-xl hover:from-blue-500/40 hover:to-blue-600/40 transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                <Plus className="w-5 h-5" /> Añadir pago (auto = total)
+              </Button>
 
-                  <Separator className="my-6 bg-white/20" />
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 border border-white/10">
+                <span className="text-white/70">Total a pagar</span>
+                <span className="text-green-300 font-semibold">Bs. {order.payments.reduce((s, p) => s + Number(p.amount || 0), 0).toFixed(2)}</span>
+              </div>
 
-                  <h3 className="text-xl font-semibold text-white">Resumen</h3>
-                  <motion.div 
-                    className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 space-y-3 font-mono text-sm"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    <p><strong>Vendedor:</strong> {order.seller_name}</p>
-                    <p><strong>Cliente:</strong> {order.customer_name} — {order.customer_phone}</p>
-                    <p><strong>Productos:</strong></p>
-                    <ul className="list-disc list-inside ml-4 space-y-1">
-                      {order.items.map((i, ix) => (
-                        <li key={ix}>
-                          {i.quantity}× {i.product_name} — Bs. {Number(i.unit_price).toFixed(2)}
-                          {i.product_code && ` [${i.product_code}]`} {i.image_url && ' (Foto)'}
-                          {i.sale_type && ` — ${i.sale_type === 'RETAIL' ? 'Minorista' : 'Mayorista'}`}
-                        </li>
-                      ))}
-                    </ul>
-                    <p><strong>Total Productos:</strong> Bs. {total.toFixed(2)}</p>
-                    <p><strong>Dirección:</strong> {order.normalized_address || order.address}</p>
-                    <p><strong>Destino:</strong> {order.destino}</p>
-                    <p><strong>Entrega:</strong> {order.delivery_date} {order.delivery_from}–{order.delivery_to}</p>
-                    <p><strong>Notas:</strong> {order.notes || '—'}</p>
-                  </motion.div>
+              <div className="space-y-2 text-sm text-white/70">
+                <div className="flex justify-between"><span>Cliente</span><span className="text-white">{order.customer_name || '—'}</span></div>
+                <div className="flex justify-between"><span>Teléfono</span><span className="text-white">{order.customer_phone || '—'}</span></div>
+                <div className="flex justify-between"><span>Productos</span><span className="text-white">{order.items.length}</span></div>
+                <div className="flex justify-between"><span>Ubicación</span><span className="text-white truncate max-w-[220px]">{order.normalized_address || order.address || '—'}</span></div>
+              </div>
 
-                  <div className="flex gap-4 mt-6">
-                    <motion.div className="w-full sm:w-1/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setCurrentStep(3)} 
-                        className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 py-3"
-                      >
-                        Volver
-                      </Button>
-                    </motion.div>
-                    <motion.div className="w-full sm:w-2/3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button 
-                        onClick={submitOrder} 
-                        disabled={isProcessing || Math.abs(total - order.payments.reduce((s, p) => s + Number(p.amount || 0), 0)) > 0.01}
-                        className="w-full bg-gradient-to-r from-green-500/30 to-green-600/30 backdrop-blur-sm border border-green-500/30 text-white font-bold text-base py-4 rounded-xl hover:from-green-500/40 hover:to-green-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                            Guardando…
-                          </>
-                        ) : (
-                          'Confirmar Pedido'
-                        )}
-                      </Button>
-                    </motion.div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <Button 
+                onClick={submitOrder} 
+                disabled={
+                  isProcessing ||
+                  Math.abs(total - order.payments.reduce((s, p) => s + Number(p.amount || 0), 0)) > 0.01 ||
+                  !isStep2Valid || !isStep3Valid || !isStep4Valid
+                }
+                className="w-full bg-gradient-to-r from-green-500/30 to-green-600/30 border border-green-500/30 text-white font-bold text-base py-4 rounded-xl hover:from-green-500/40 hover:to-green-600/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Guardando…
+                  </>
+                ) : (
+                  'Confirmar venta'
+                )}
+              </Button>
+
+              {Math.abs(total - order.payments.reduce((s, p) => s + Number(p.amount || 0), 0)) > 0.01 && (
+                <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-sm">
+                  El total de pagos debe coincidir con el total de productos.
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
       </div>
     </div>
   );
