@@ -5,12 +5,19 @@ import { FontPreloader } from '@/components/FontPreloader'; // <-- 1. Importa el
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { cn } from '@/lib/utils/cn';
 
+const THEME_STORAGE_KEY = 'atlas-360-theme';
+const LEGACY_THEME_STORAGE_KEY = 'fenix-os-theme';
+
 const THEME_INIT_SCRIPT = `(function() {
   try {
-    var storageKey = 'fenix-os-theme';
-    var stored = localStorage.getItem(storageKey);
+    var storageKey = '${THEME_STORAGE_KEY}';
+    var legacyKey = '${LEGACY_THEME_STORAGE_KEY}';
+    var stored = localStorage.getItem(storageKey) || localStorage.getItem(legacyKey);
     var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
     var theme = stored === 'light' || stored === 'dark' ? stored : (prefersLight ? 'light' : 'dark');
+    if (!localStorage.getItem(storageKey) && (stored === 'light' || stored === 'dark')) {
+      localStorage.setItem(storageKey, stored);
+    }
     var root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
@@ -22,12 +29,12 @@ const THEME_INIT_SCRIPT = `(function() {
 })();`;
 
 export const metadata: Metadata = {
-  title: 'Fenix Store | Sistema de Gestión',
-  description: 'Dashboard central del sistema de gestión integral de Fenix Store con diseño inspirado en Apple.',
-  keywords: ['Fenix Store', 'Dashboard', 'Gestión', 'Sistema'],
-  authors: [{ name: 'Fenix Store Team' }],
-  creator: 'Fenix Store',
-  publisher: 'Fenix Store',
+  title: 'Atlas 360 | Sistema de Gestión',
+  description: 'Dashboard central del sistema de gestión integral de Atlas 360 con diseño inspirado en Apple.',
+  keywords: ['Atlas 360', 'Dashboard', 'Gestión', 'Sistema'],
+  authors: [{ name: 'Atlas 360 Team' }],
+  creator: 'Atlas 360',
+  publisher: 'Atlas 360',
   robots: 'noindex, nofollow',
 };
 
@@ -58,7 +65,7 @@ export default function RootLayout({
         {/* Meta tags adicionales para PWA */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Fenix Store" />
+        <meta name="apple-mobile-web-app-title" content="Atlas 360" />
         
         {/* Favicon y iconos */}
         <link rel="icon" href="/favicon.ico" sizes="any" />

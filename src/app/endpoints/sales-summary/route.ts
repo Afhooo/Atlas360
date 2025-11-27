@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, withSupabaseRetry, isSupabaseTransientError } from '@/lib/supabase';
+import { isDemoMode, demoSalesSummary } from '@/lib/demo/mockData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  if (isDemoMode()) {
+    return NextResponse.json(demoSalesSummary, { status: 200 });
+  }
+
   let sb;
   try {
     sb = supabaseAdmin();

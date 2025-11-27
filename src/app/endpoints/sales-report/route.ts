@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { supabaseAdmin, withSupabaseRetry, isSupabaseTransientError } from '@/lib/supabase';
+import { isDemoMode, demoSalesReport } from '@/lib/demo/mockData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,16 @@ async function getPeopleMaps(sb: ReturnType<typeof supabaseAdmin>) {
 
 // --- API ENDPOINT MAESTRO ---
 export async function GET(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  const channelFilter = searchParams.get('channel');
+
+  if (isDemoMode()) {
+    const rows = channelFilter
+      ? demoSalesReport.filter((row) => row.channel === channelFilter)
+      : demoSalesReport;
+    return NextResponse.json(rows, { status: 200 });
+  }
+
   let sb;
   try {
     sb = supabaseAdmin();
@@ -44,8 +55,6 @@ export async function GET(request: NextRequest) {
     console.error('Error creando cliente Supabase:', err);
     return NextResponse.json({ error: 'Configuración de Supabase inválida' }, { status: 500 });
   }
-  const { searchParams } = request.nextUrl;
-  const channelFilter = searchParams.get('channel');
 
   try {
     const { peopleById, peopleByName } = await getPeopleMaps(sb);

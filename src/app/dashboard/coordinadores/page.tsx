@@ -38,7 +38,7 @@ export default function CoordinadoresHome() {
         {/* header */}
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">FENIX — Coordinación</h1>
+            <h1 className="text-3xl font-bold">ATLAS 360 — Coordinación</h1>
             <p className="text-white/60 text-sm">Panel de acciones rápidas del coordinador</p>
           </div>
           <Link href="/" className="text-sm text-gray-300 hover:text-white border border-white/10 bg-white/5 px-3 py-1.5 rounded-lg">

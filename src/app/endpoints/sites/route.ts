@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '@/lib/supabase';
+import { isDemoMode, demoSites } from '@/lib/demo/mockData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const assignedTo = searchParams.get('assigned_to');
     const name = (searchParams.get('name') || '').trim();
+
+    if (isDemoMode()) {
+      const filtered = name
+        ? demoSites.filter((s) => s.name.toLowerCase().includes(name.toLowerCase()))
+        : demoSites;
+      return NextResponse.json(
+        { ok: true, results: filtered },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
 
     const sb = supabaseAdmin();
 

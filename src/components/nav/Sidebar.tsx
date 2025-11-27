@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, BarChart3, Users, UserPlus, Package,
   RotateCcw, Calendar, FileText, Settings, CheckCircle2,
-  LogOut, ChevronRight, Sparkles, Activity, ShieldCheck
+  LogOut, ChevronRight, Sparkles, Activity, ShieldCheck, Route
 } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
 import { useState, useEffect } from 'react';
@@ -17,6 +17,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 // Importa roles SOLO desde lib/auth/roles
 import { can, ROUTES, type Role } from '@/lib/auth/roles';
 import { FINANCIAL_CONTROL_IDS } from '@/lib/auth/financial';
+import { moduleFlags, type ModuleKey } from '@/lib/config/featureFlags';
+import { canAccessModule } from '@/lib/auth/permissions';
 
 type NavLinkItem = {
   href: string;
@@ -26,6 +28,7 @@ type NavLinkItem = {
   req?: Parameters<typeof can>[1];
   badge?: string | number;
   requiresPersonId?: string[];
+  module?: ModuleKey;
 };
 
 type SidebarProps = {
@@ -142,62 +145,44 @@ export const Sidebar: FC<SidebarProps> = ({
 
   const SECTIONS: { title: string; icon?: ReactNode; items: NavLinkItem[] }[] = [
     {
-      title: 'Principal',
+      title: 'Operación',
       icon: <Home size={12} />,
       items: [
-        { href: ROUTES.DASH, icon: <Home size={18} />, label: 'Resumen diario', shortcut: 'H' },
+        { href: '/dashboard', icon: <Home size={18} />, label: 'Dashboard', shortcut: 'H', module: 'dashboard' },
+        { href: '/ventas', icon: <BarChart3 size={18} />, label: 'Ventas (análisis)', shortcut: 'V', module: 'ventas' },
+        { href: '/ventas/registro', icon: <UserPlus size={18} />, label: 'Registrar venta', module: 'ventas' },
+        { href: '/inventario', icon: <Package size={18} />, label: 'Inventario', shortcut: 'I', module: 'inventario' },
+        { href: '/logistica', icon: <Route size={18} />, label: 'Logística', shortcut: 'L', module: 'inventario', req: 'view:logistica' },
+      ],
+    },
+    {
+      title: 'Finanzas',
+      icon: <Activity size={12} />,
+      items: [
         {
-          href: '/dashboard/financial-control',
+          href: '/cajas',
           icon: <Activity size={18} />,
-          label: 'Finanzas',
+          label: 'Cajas y cuadratura',
           shortcut: 'F',
-          requiresPersonId: [...FINANCIAL_CONTROL_IDS],
-        },
-        {
-          href: ROUTES.PERMISOS_ADMIN,
-          icon: <ShieldCheck size={18} />,
-          label: 'Permisos del personal',
+          module: 'cajas',
           requiresPersonId: [...FINANCIAL_CONTROL_IDS],
         },
       ],
     },
     {
-      title: 'Reportes',
-      icon: <BarChart3 size={12} />,
-      items: [
-        { href: ROUTES.SALES_REPORT, icon: <BarChart3 size={18} />, label: 'Análisis de ventas', shortcut: '2', req: 'view:sales-report' },
-        { href: ROUTES.REPORTE_VENDEDORES, icon: <Users size={18} />, label: 'Rendimiento de asesores', shortcut: '7', req: 'view:resumen-asesores' },
-        { href: ROUTES.REPORTE_PROMOTORES, icon: <Users size={18} />, label: 'Rendimiento de promotores', req: 'view:resumen-promotores' },
-        { href: ROUTES.ASISTENCIA_PANEL, icon: <Calendar size={18} />, label: 'Control de asistencia', shortcut: 'R', req: 'view:reporte-asistencia' },
-      ],
-    },
-    {
-      title: 'Operación',
-      icon: <Package size={12} />,
-      items: [
-        { href: ROUTES.LOGISTICA, icon: <Package size={18} />, label: 'Despachos y rutas', shortcut: '1', req: 'view:logistica' },
-        { href: ROUTES.INVENTARIO, icon: <Package size={18} />, label: 'Stock y transferencias', shortcut: 'I', req: 'view:inventario' },
-        { href: ROUTES.REGISTRO_ASESORES, icon: <UserPlus size={18} />, label: 'Registrar venta (asesor)', shortcut: '6', req: 'view:registro-asesores' },
-        { href: ROUTES.REGISTRO_PROMOTORES, icon: <UserPlus size={18} />, label: 'Registrar venta (promotor)', req: 'view:registro-promotores' },
-        { href: ROUTES.VALIDACION_ASESORES, icon: <CheckCircle2 size={18} />, label: 'Validar ventas asesores', req: 'view:validacion-asesores' },
-        { href: ROUTES.VALIDACION_PROMOTORES, icon: <CheckCircle2 size={18} />, label: 'Validar ventas promotores', req: 'view:validacion-promotores' },
-        { href: ROUTES.DEVOLUCIONES, icon: <RotateCcw size={18} />, label: 'Gestión de devoluciones', shortcut: '4', req: 'view:devoluciones' },
-      ],
-    },
-    {
-      title: 'Equipo',
+      title: 'Personas',
       icon: <Users size={12} />,
       items: [
-        { href: ROUTES.ASISTENCIA, icon: <Calendar size={18} />, label: 'Registrar asistencia', shortcut: 'A', req: 'view:asistencia' },
-        { href: ROUTES.MI_RESUMEN, icon: <FileText size={18} />, label: 'Mi panel', req: 'view:mi-resumen' },
+        { href: '/rrhh', icon: <Calendar size={18} />, label: 'RRHH y asistencia', shortcut: 'R', module: 'rrhh' },
+        { href: '/productividad', icon: <BarChart3 size={18} />, label: 'Productividad', module: 'productividad' },
       ],
     },
     {
-      title: 'Administración',
+      title: 'Configuración',
       icon: <Settings size={12} />,
       items: [
-        { href: ROUTES.PLAYBOOK, icon: <FileText size={18} />, label: 'Playbook comercial', shortcut: '5', req: 'view:playbook' },
-        { href: ROUTES.USERS_ADMIN, icon: <Settings size={18} />, label: 'Usuarios y roles', shortcut: '8', req: 'view:users-admin' },
+        { href: '/configuracion', icon: <Settings size={18} />, label: 'Parámetros', module: 'configuracion' },
+        { href: '/configuracion/usuarios', icon: <Settings size={18} />, label: 'Usuarios y roles', shortcut: '8', module: 'configuracion' },
       ],
     },
   ];
@@ -216,11 +201,11 @@ export const Sidebar: FC<SidebarProps> = ({
             <div className="relative w-10 h-10">
               <div className="absolute inset-0 bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 rounded-xl border border-white/20" />
               <div className="relative w-full h-full flex items-center justify-center">
-                <Image src="/1.png" alt="Fenix" width={24} height={24} className="object-contain" priority />
+                <Image src="/1.png" alt="Atlas 360" width={24} height={24} className="object-contain" priority />
               </div>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="apple-h3 text-white group-hover:text-apple-blue-300 transition-colors duration-300">Fenix OS</div>
+              <div className="apple-h3 text-white group-hover:text-apple-blue-300 transition-colors duration-300">Atlas 360</div>
               <div className="text-apple-caption text-apple-gray-500 -mt-0.5">Sistema de gestión</div>
             </div>
             <Sparkles size={16} className="text-apple-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -229,13 +214,16 @@ export const Sidebar: FC<SidebarProps> = ({
 
         <nav className="flex-1 px-4 py-6 space-y-6 overflow-y-auto scrollbar-thin transition-colors duration-500">
           {SECTIONS.map((section) => {
-            const items = section.items.filter((item) => {
-              if (item.requiresPersonId) {
-                if (!meLoaded) return false;
-                return !!currentUser?.id && item.requiresPersonId.includes(currentUser.id);
-              }
-              return !item.req || can(userRole, item.req);
-            });
+          const items = section.items.filter((item) => {
+            if (item.module && (!moduleFlags[item.module] || !canAccessModule(userRole, item.module))) {
+              return false;
+            }
+            if (item.requiresPersonId) {
+              if (!meLoaded) return false;
+              return !!currentUser?.id && item.requiresPersonId.includes(currentUser.id);
+            }
+            return !item.req || can(userRole, item.req);
+          });
 
             if (!items.length) return null;
 

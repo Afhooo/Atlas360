@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isDemoMode, demoWeather } from '@/lib/demo/mockData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,14 +31,15 @@ function riskLevel(rain1h:number, windKmh:number): 'low'|'med'|'high' {
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const list = (searchParams.get('cities') || '')
-      .split(',').map(s=>decodeURIComponent(s.trim())).filter(Boolean) as CityKey[];
-    const cities: CityKey[] = list.length ? list : Object.keys(CITIES) as CityKey[];
+  const { searchParams } = new URL(req.url);
+  const list = (searchParams.get('cities') || '')
+    .split(',').map(s=>decodeURIComponent(s.trim())).filter(Boolean) as CityKey[];
+  const cities: CityKey[] = list.length ? list : Object.keys(CITIES) as CityKey[];
 
-    if (!API) {
-      return NextResponse.json({ ok:false, reason:'no_api_key', cities:[], cached:false }, { status:200 });
-    }
+  if (isDemoMode() || !API) {
+    const only = demoWeather.cities.filter((r:any)=>cities.includes(r.city as CityKey));
+    return NextResponse.json({ ...demoWeather, cities: only }, { status: 200 });
+  }
 
     if (cache && Date.now() - cache.at < CACHE_MS) {
       const only = cache.data.filter((r:any)=>cities.includes(r.city));

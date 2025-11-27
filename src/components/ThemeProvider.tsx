@@ -11,7 +11,8 @@ type ThemeContextValue = {
   systemTheme: Theme;
 };
 
-const STORAGE_KEY = 'fenix-os-theme';
+const STORAGE_KEY = 'atlas-360-theme';
+const LEGACY_STORAGE_KEY = 'fenix-os-theme';
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
@@ -20,8 +21,12 @@ function getPreferredTheme(): Theme {
     return 'dark';
   }
 
-  const stored = window.localStorage.getItem(STORAGE_KEY);
+  const stored =
+    window.localStorage.getItem(STORAGE_KEY) || window.localStorage.getItem(LEGACY_STORAGE_KEY);
   if (stored === 'light' || stored === 'dark') {
+    if (!window.localStorage.getItem(STORAGE_KEY)) {
+      window.localStorage.setItem(STORAGE_KEY, stored);
+    }
     return stored;
   }
 

@@ -5,17 +5,20 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import { useMemo, type ComponentProps } from 'react';
 import { motion } from 'framer-motion';
-import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns';
+import { format, formatDistanceToNow, parseISO, isValid, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   Activity, ArrowRight, Bell, ClipboardList, RotateCcw,
-  UserPlus, Users2, DollarSign, Package,
+  UserPlus, Users2, DollarSign, Package, Calendar, Settings,
   AlertTriangle, CheckCircle, Clock, Sparkles, TrendingUp
 } from 'lucide-react';
 import { normalizeRole, type Role } from '@/lib/auth/roles';
 
 import WeatherStrip from '@/components/widgets/WeatherStrip';
 import TrafficPanel from '@/components/widgets/TrafficPanel';
+import { ModuleKey, moduleFlags } from '@/lib/config/featureFlags';
+import { canAccessModule } from '@/lib/auth/permissions';
+import { useDemoOps } from '@/lib/demo/state';
 
 const fetcher = async (u: string) => {
   const res = await fetch(u, { cache: 'no-store' });
@@ -49,12 +52,22 @@ type ActivityItem = {
   ts: number;
 };
 
+const MODULES: { title: string; desc: string; href: string; icon: React.ReactNode; module: ModuleKey }[] = [
+  { title: 'Ventas', desc: 'Registra y analiza ventas', href: '/ventas', icon: <TrendingUp size={16} />, module: 'ventas' },
+  { title: 'Inventario', desc: 'Stock y movimientos', href: '/inventario', icon: <Package size={16} />, module: 'inventario' },
+  { title: 'RRHH y asistencia', desc: 'Marcajes y geolocalización', href: '/rrhh', icon: <Calendar size={16} />, module: 'rrhh' },
+  { title: 'Productividad', desc: 'Horas efectivas y métricas', href: '/productividad', icon: <Activity size={16} />, module: 'productividad' },
+  { title: 'Cajas', desc: 'Aperturas y cuadratura', href: '/cajas', icon: <DollarSign size={16} />, module: 'cajas' },
+  { title: 'Configuración', desc: 'Usuarios y roles', href: '/configuracion', icon: <Settings size={16} />, module: 'configuracion' },
+];
+
 export default function DashboardHome() {
   // === DATA SOURCES ===
   const { data: me } = useSWR('/endpoints/me', fetcher);
 
   const role: Role = useMemo(() => normalizeRole(me?.role), [me?.role]);
   const name = (me?.full_name || '—').split(' ')[0];
+  const demoOps = useDemoOps();
 
   const todayKey = useMemo(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/La_Paz' }).format(new Date()), []);
   const monthKey = useMemo(() => todayKey.slice(0, 7), [todayKey]);
@@ -64,6 +77,7 @@ export default function DashboardHome() {
   const { data: returnsReport } = useSWR('/endpoints/returns-report', fetcher);
   const { data: mySales } = useSWR(() => (me?.ok ? `/endpoints/my/sales?month=${monthKey}` : null), fetcher);
   const { data: myAttendance } = useSWR(() => (me?.ok && role !== 'promotor' ? `/endpoints/my/attendance?month=${monthKey}` : null), fetcher);
+  const { data: salesReport } = useSWR('/endpoints/sales-report', fetcher);
 
   // Clima y Tráfico
   const { data: wx } = useSWR(
@@ -194,6 +208,25 @@ export default function DashboardHome() {
     return events.slice(0, 8);
   }, [myAttendance, mySales]);
 
+  const weeklySales = useMemo(() => {
+    const rows = Array.isArray(salesReport) ? salesReport : [];
+    const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const end = endOfWeek(new Date(), { weekStartsOn: 1 });
+    let revenue = 0;
+    let tickets = 0;
+    let units = 0;
+    rows.forEach((r: any) => {
+      const d = parseDate(r?.order_date);
+      if (!d) return;
+      if (d >= start && d <= end) {
+        revenue += Number(r?.subtotal ?? 0);
+        tickets += 1;
+        units += Number(r?.quantity ?? 0);
+      }
+    });
+    return { revenue, tickets, units };
+  }, [salesReport]);
+
   return (
     <div className="min-h-screen space-y-8">
       {/* === HEADER HERO === */}
@@ -224,7 +257,7 @@ export default function DashboardHome() {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.2 }}
                 >
-                  Hola, {name} 👋
+                  Hola, {name} 👋 Bienvenido a Atlas 360
                 </motion.h1>
                 <motion.p 
                   className="apple-body text-apple-gray-300"
@@ -232,7 +265,7 @@ export default function DashboardHome() {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
                 >
-                  Esto es lo que importa hoy
+                  CRM operativo para ventas, caja e inventario en un solo lugar.
                 </motion.p>
               </div>
             </div>
@@ -243,14 +276,18 @@ export default function DashboardHome() {
               transition={{ delay: 0.4 }}
               className="flex gap-3"
             >
-              <Link href="/dashboard/sales-report" className="btn-primary">
-                <TrendingUp size={18} />
-                Ver reportes
+              <Link href="/dashboard/asesores/registro" className="btn-primary">
+                <UserPlus size={18} />
+                Registrar venta
                 <ArrowRight size={16} />
               </Link>
-              <Link href="/dashboard/asesores/registro" className="btn-secondary">
-                <UserPlus size={18} />
-                Acción rápida
+              <Link href="/dashboard/financial-control" className="btn-secondary">
+                <DollarSign size={18} />
+                Caja diaria
+              </Link>
+              <Link href="/dashboard/inventario" className="btn-secondary">
+                <Package size={18} />
+                Ver inventario
               </Link>
             </motion.div>
           </div>
@@ -291,6 +328,37 @@ export default function DashboardHome() {
             hint={`${num(monthSummary.products)} productos`}
             icon={<CheckCircle size={20} />}
             color="green"
+          />
+        </div>
+      </motion.section>
+
+      {/* === VISIÓN DE NEGOCIO (ventas/finanzas/gestión) === */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.32 }}
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          <KpiCard
+            title="Ventas semana"
+            value={money(weeklySales.revenue)}
+            hint={`${num(weeklySales.tickets)} tickets / ${num(weeklySales.units)} uds`}
+            icon={<TrendingUp size={20} />}
+            color="blue"
+          />
+          <KpiCard
+            title="Caja operativa"
+            value={money(demoOps.cash)}
+            hint="Muestra cash demo acumulado"
+            icon={<DollarSign size={20} />}
+            color="green"
+          />
+          <KpiCard
+            title="Asistencia"
+            value={num(myAttendance?.days?.length ?? 0)}
+            hint="Días con marcaje en el mes"
+            icon={<Calendar size={20} />}
+            color="purple"
           />
         </div>
       </motion.section>
@@ -354,6 +422,39 @@ export default function DashboardHome() {
               label="Reporte Asistencia" 
               description="Control de asistencia"
             />
+          </div>
+        </div>
+      </motion.section>
+
+      {/* === MÓDULOS PRINCIPALES === */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.35 }}
+      >
+        <div className="glass-card p-4 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="apple-h2">Módulos Atlas 360</h2>
+              <p className="apple-caption text-apple-gray-400">Accede rápido a las áreas clave</p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {MODULES.filter((m) => moduleFlags[m.module] && canAccessModule(role, m.module)).map((m) => (
+              <Link
+                key={m.href}
+                href={m.href}
+                className="glass-card p-4 border hover:shadow-apple-lg transition flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-apple bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 border border-white/15 flex items-center justify-center text-apple-blue-200">
+                  {m.icon}
+                </div>
+                <div>
+                  <div className="apple-h4 text-white">{m.title}</div>
+                  <div className="apple-caption text-apple-gray-400">{m.desc}</div>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </motion.section>

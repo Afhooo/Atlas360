@@ -30,7 +30,7 @@ export default function LoginPage() {
  * Metadata para SEO y navegador
  */
 export const metadata = {
-  title: 'Iniciar Sesión - Fenix Store',
-  description: 'Accede al sistema de gestión integral de Fenix Store',
+  title: 'Iniciar Sesión - Atlas 360',
+  description: 'Accede al sistema de gestión integral de Atlas 360',
   robots: 'noindex, nofollow', // No indexar página de login
 };

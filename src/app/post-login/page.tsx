@@ -98,7 +98,7 @@ export default function PostLoginRouter() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">FENIX Store</h1>
+          <h1 className="text-2xl font-bold text-white mb-2">ATLAS 360</h1>
           <p className="text-gray-300">Sistema de Gestión Integral</p>
         </div>
 

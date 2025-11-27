@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 const KEY = process.env.OPENCAGE_API_KEY || process.env.NEXT_PUBLIC_OPENCAGE_API_KEY;
 const NOMINATIM_UA =
-  process.env.NOMINATIM_USER_AGENT || 'fenix-store/1.0 (contacto: soporte@fenix.local)';
+  process.env.NOMINATIM_USER_AGENT || 'atlas-360/1.0 (contacto: soporte@atlas360.local)';
 
 type SafeFetchOptions = RequestInit & { timeoutMs?: number };
 

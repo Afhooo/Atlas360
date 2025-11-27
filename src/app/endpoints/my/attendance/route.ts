@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin, withSupabaseRetry, isSupabaseTransientError, SUPABASE_CONFIG } from '@/lib/supabase';
+import { isDemoMode, demoAttendance } from '@/lib/demo/mockData';
 import type { PostgrestResponse } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
@@ -71,15 +72,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'invalid_sub' }, { status: 401 });
     }
 
-    if (!SUPABASE_CONFIG.isConfigured) {
-      return NextResponse.json(
-        {
-          ok: true,
-          kpis: { dias_con_marca: 0, entradas: 0, salidas: 0, pct_geocerca_ok: 0 },
-          days: [],
-        },
-        { status: 200, headers: { 'Cache-Control': 'no-store' } }
-      );
+    if (isDemoMode()) {
+      return NextResponse.json(demoAttendance, { status: 200, headers: { 'Cache-Control': 'no-store' } });
     }
 
     // === rango mensual (UTC) ===

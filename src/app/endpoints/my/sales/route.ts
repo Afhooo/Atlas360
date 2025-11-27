@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin, withSupabaseRetry, isSupabaseTransientError, SUPABASE_CONFIG } from '@/lib/supabase';
+import { isDemoMode, demoMySales } from '@/lib/demo/mockData';
 import type { PostgrestResponse } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
@@ -85,16 +86,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'invalid_sub' }, { status: 401 });
     }
 
-    if (!SUPABASE_CONFIG.isConfigured) {
-      return NextResponse.json(
-        {
-          ok: true,
-          kpis: { ventas: 0, pedidos: 0, total: 0 },
-          topProducts: [],
-          list: [],
-        },
-        { status: 200, headers: { 'Cache-Control': 'no-store' } }
-      );
+    if (isDemoMode()) {
+      return NextResponse.json(demoMySales, { status: 200, headers: { 'Cache-Control': 'no-store' } });
     }
 
     const monthStart = `${month}-01`;

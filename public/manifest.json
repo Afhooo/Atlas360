@@ -1,11 +1,11 @@
 {
-  "name": "Fenix Store",
-  "short_name": "Fenix",
+  "name": "Atlas 360",
+  "short_name": "Atlas 360",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "description": "Sistema de gestión integral Fenix Store",
+  "description": "Sistema de gestión integral Atlas 360",
   "icons": [
     {
       "src": "/icon.svg",

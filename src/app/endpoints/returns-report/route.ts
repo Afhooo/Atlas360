@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { isDemoMode, demoReturnsReport } from '@/lib/demo/mockData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,10 @@ function sbAdmin(): SupabaseClient {
 }
 
 export async function GET() {
+  if (isDemoMode()) {
+    return NextResponse.json(demoReturnsReport, { status: 200 });
+  }
+
   const sb = sbAdmin();
 
   try {

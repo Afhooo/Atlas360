@@ -2,12 +2,11 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseClient } from '@/lib/supabase';
+import { isDemoMode, demoOrders, demoDeliveries, demoRoutes } from '@/lib/demo/mockData';
 import type { OrderRow, DeliveryUser, OrderStatus, DeliveryRoute, EnrichedDeliveryRoute } from '@/lib/types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = supabaseClient;
 
 export function useLogisticsData() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -21,6 +20,14 @@ export function useLogisticsData() {
     if (!isRefresh) setLoading(true);
     setError(null);
     try {
+      if (isDemoMode()) {
+        setOrders(demoOrders);
+        setDeliveries(demoDeliveries);
+        setDeliveryRoutes(demoRoutes);
+        setIsLive(false);
+        return;
+      }
+
       const [ordersRes, deliveriesRes, routesRes] = await Promise.all([
         // ACTUALIZADO: Agregamos los campos de encomienda en la consulta
         supabase.from('orders').select(`
@@ -65,6 +72,11 @@ export function useLogisticsData() {
 
   useEffect(() => {
     loadData();
+    if (isDemoMode()) {
+      setIsLive(false);
+      return;
+    }
+
     const channel = supabase
       .channel('logistica-realtime-final')
       .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {

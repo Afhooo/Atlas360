@@ -1,4 +1,5 @@
 username,email,user_id,action,ok,reason,role
+admin,admin@atlas360.local,admin-demo-id,updated,1,,ADMIN
 anghela.carolina_e794,anghela.carolina_e794-e794ef@fenix.local,f0d13a3b-b313-4b2c-bef5-f55c49893de7,updated,1,,PROMOTOR
 leonardo.torres_a729,leonardo.torres_a729-a72907@fenix.local,e9883502-c6ff-4a54-b9d1-173eff36c047,updated,1,,PROMOTOR
 milenka.tatiana_5983,milenka.tatiana_5983-5983cb@fenix.local,c40456cc-233f-482e-93aa-ec6cc850762f,updated,1,,PROMOTOR

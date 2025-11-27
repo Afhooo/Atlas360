@@ -3,6 +3,7 @@ import { createClient, type PostgrestError } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
 import { buildLoginIndexes } from '@/lib/auth/login-normalize';
 import { LoginIndexSupport, runWithLoginIndexFallback, type LoginIndexValues } from '@/lib/auth/login-index-support';
+import { isDemoMode, demoUsers, demoSites } from '@/lib/demo/mockData';
 
 function getAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -100,7 +101,7 @@ const mapPeopleConstraintMessage = (error: PostgrestError) => {
 // GET /endpoints/users
 export async function GET(req: Request) {
   try {
-    const supabase = getAdmin();
+    const supabase = isDemoMode() ? null : getAdmin();
 
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get('q') || '').trim();
@@ -112,6 +113,43 @@ export async function GET(req: Request) {
     const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize') || 20)));
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
+
+    if (isDemoMode()) {
+      let rows = [...demoUsers];
+
+      if (q) {
+        const term = q.toLowerCase();
+        rows = rows.filter(
+          (u) =>
+            u.full_name?.toLowerCase().includes(term) ||
+            u.email?.toLowerCase().includes(term) ||
+            u.username?.toLowerCase().includes(term)
+        );
+      }
+      if (role) {
+        rows = rows.filter((u) => u.fenix_role?.toUpperCase() === role);
+      }
+      if (activeParam === 'true') {
+        rows = rows.filter((u) => u.active);
+      }
+      if (branchFilter) {
+        rows = rows.filter((u) => {
+          if (branchFilter.type === 'site') return u.site_id === branchFilter.siteId;
+          if (branchFilter.type === 'legacy' && branchFilter.term) {
+            return (u.branch_id || '').toLowerCase().includes(branchFilter.term.toLowerCase());
+          }
+          return true;
+        });
+      }
+
+      const total = rows.length;
+      const paged = rows.slice(from, to + 1).map((row) => ({
+        ...row,
+        site_name: row.site_id ? demoSites.find((s) => s.id === row.site_id)?.name ?? null : null,
+      }));
+
+      return NextResponse.json({ ok: true, data: paged, page, pageSize, total });
+    }
 
     // NOTE: branch_id es alias de local
     let query = supabase

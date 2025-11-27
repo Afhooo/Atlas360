@@ -1,5 +1,6 @@
 // src/app/endpoints/ops/traffic/route.ts
 import { NextResponse } from 'next/server';
+import { isDemoMode, demoTraffic } from '@/lib/demo/mockData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,14 +60,14 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const citiesParam = searchParams.get('cities') || '';
-    const cities: CityKey[] = citiesParam
-      ? citiesParam.split(',').map(c => decodeURIComponent(c.trim())) as CityKey[]
-      : ['Santa Cruz','Sucre','La Paz','El Alto','Cochabamba'];
+  const cities: CityKey[] = citiesParam
+    ? citiesParam.split(',').map(c => decodeURIComponent(c.trim())) as CityKey[]
+    : ['Santa Cruz','Sucre','La Paz','El Alto','Cochabamba'];
 
-    if (!HERE_API_KEY) {
-      // sin clave → retorno “sin incidentes”, no invento nada
-      return NextResponse.json({ incidents: [], provider: 'here', updatedAt: Date.now() }, { status: 200 });
-    }
+  if (isDemoMode() || !HERE_API_KEY) {
+    const filtered = demoTraffic.incidents.filter((i:any) => cities.includes(i.city as CityKey));
+    return NextResponse.json({ ...demoTraffic, incidents: filtered }, { status: 200 });
+  }
 
     const results: Incident[] = [];
 

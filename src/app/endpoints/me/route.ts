@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
           auth_user_id: payload.sub,
           person_pk: null,
           username: payload.usr ?? null,
-          full_name: payload.name ?? payload.usr ?? 'Usuario Fenix',
+          full_name: payload.name ?? payload.usr ?? 'Usuario Atlas 360',
           email: payload.email ?? null,
           login_email: payload.email ?? null,
           role: normalizedRole,
