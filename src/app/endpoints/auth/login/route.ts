@@ -1,30 +1,26 @@
 export const runtime = 'nodejs';
 // src/app/endpoints/auth/login/route.ts - ENDPOINT UNIFICADO
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { authEnv } from '@/lib/auth/env';
 import { flattenLoginInput, normalizeLoginInput } from '@/lib/auth/login-normalize';
+import { supabaseAdmin as createSupabaseAdmin, SUPABASE_CONFIG } from '@/lib/supabase';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const { jwtSecret: JWT_SECRET, sessionCookieName: COOKIE_NAME, sessionDays: COOKIE_DAYS } = authEnv;
 const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'FENIX2025!';
 const DEV_LOGIN_FALLBACK_ENABLED = process.env.DEV_LOGIN_FALLBACK !== 'false';
 const DEV_LOGIN_ALLOW_UNKNOWN = process.env.DEV_LOGIN_ALLOW_UNKNOWN !== 'false';
 
-const hasSupabaseConfig = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY);
+const hasSupabaseConfig = SUPABASE_CONFIG.isConfigured && SUPABASE_CONFIG.hasServiceKey;
 if (!hasSupabaseConfig) {
   console.warn('[auth/login] SUPABASE_SERVICE_ROLE_KEY o NEXT_PUBLIC_SUPABASE_URL no definidos; usando fallback local.');
 }
 
 // Cliente Supabase con service role para operaciones administrativas (si hay credenciales)
-const supabaseAdmin = hasSupabaseConfig
-  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { persistSession: false } })
-  : null;
+const supabaseAdmin = hasSupabaseConfig ? createSupabaseAdmin() : null;
 
 type PersonRecord = {
   id: string;

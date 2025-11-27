@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { isDemoMode, demoReturnsReport } from '@/lib/demo/mockData';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,18 +19,12 @@ type ProductReturnRow = {
   return_proof_url: string | null;
 };
 
-function sbAdmin(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
 export async function GET() {
   if (isDemoMode()) {
     return NextResponse.json(demoReturnsReport, { status: 200 });
   }
 
-  const sb = sbAdmin();
+  const sb = supabaseAdmin();
 
   try {
     const { data: returnItems, error: itemsError } = await sb

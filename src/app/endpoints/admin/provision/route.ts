@@ -1,19 +1,17 @@
 // src/app/endpoints/admin/provision/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabase';
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const ADMIN_KEY = process.env.ADMIN_PROVISION_KEY!;
+const ADMIN_KEY = process.env.ADMIN_PROVISION_KEY || '';
 
 const toEmail = (u: string) => `${u}@fenix.local`;
 
 export async function POST(req: NextRequest) {
   // Protección admin simple por header
   const key = req.headers.get('x-admin-key');
-  if (!key || key !== ADMIN_KEY) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
-  }
+    if (!ADMIN_KEY || !key || key !== ADMIN_KEY) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
   try {
     const { username, password } = await req.json();
@@ -25,7 +23,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
+    const admin = supabaseAdmin();
 
     // 1) Buscar persona en tabla people
     const { data: person, error: personErr } = await admin

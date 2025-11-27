@@ -14,7 +14,7 @@ const CITIES: Record<CityKey, {lat:number; lon:number}> = {
   'Cochabamba':  { lat: -17.3895, lon: -66.1568 },
 };
 
-const API = process.env.OPENWEATHER_API_KEY!;
+const API = process.env.OPENWEATHER_API_KEY || '';
 const CACHE_MS = 5 * 60 * 1000;
 
 let cache: { at:number; data:any[] } | null = null;

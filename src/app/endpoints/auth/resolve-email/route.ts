@@ -1,10 +1,8 @@
 // src/app/endpoints/auth/resolve-email/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { supabaseAdmin } from '@/lib/supabase';
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const DEFAULT_DOMAIN = process.env.LOGIN_DOMAIN || 'fenix.local';
 
 // --- helpers (mismos que el script de provisión) ---
@@ -44,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     const username = usernameRaw.trim();
-    const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
+    const admin = supabaseAdmin();
 
     // person puede ser null
     let person: Record<string, any> | null = null;

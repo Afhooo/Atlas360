@@ -1,16 +1,8 @@
 // app/endpoints/products/route.ts  (misma funcionalidad; solo lazy init + runtime node)
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
-
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const srv = process.env.SUPABASE_SERVICE_ROLE_KEY; // mismo nombre que en el resto
-  if (!url) throw new Error('Missing env: NEXT_PUBLIC_SUPABASE_URL');
-  if (!srv) throw new Error('Missing env: SUPABASE_SERVICE_ROLE');
-  return createClient(url, srv, { auth: { persistSession: false } });
-}
 
 export async function GET(req: Request) {
   const { searchParams } = new globalThis.URL(req.url);
@@ -21,7 +13,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ items: [] }, { status: 200 });
   }
 
-  const supabase = getSupabaseAdmin(); // ← lazy init
+  const supabase = supabaseAdmin(); // ← lazy init
 
   const { data, error } = await supabase
     .from('products')

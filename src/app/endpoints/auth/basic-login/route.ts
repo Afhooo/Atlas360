@@ -1,11 +1,8 @@
 // src/app/endpoints/auth/basic-login/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { supabaseAdmin } from '@/lib/supabase';
 
 const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'FENIX2025!';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
@@ -20,7 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Faltan credenciales' }, { status: 400 });
     }
 
-    const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
+    const admin = supabaseAdmin();
 
     // Busca por username exacto o por email (case-insensitive)
     const isEmail = String(username).includes('@');

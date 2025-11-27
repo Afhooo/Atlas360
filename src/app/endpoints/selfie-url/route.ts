@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabase';
 
 // Ajusta si tu bucket tiene otro nombre; en tu consola se ve "attendance-selfies"
 const BUCKET = process.env.ATTENDANCE_BUCKET ?? 'attendance-selfies';
@@ -12,10 +12,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'attendance_id requerido' }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,                 // SERVER env
-      process.env.SUPABASE_SERVICE_ROLE_KEY!     // SERVICE ROLE (solo server)
-    );
+    const supabase = supabaseAdmin();
 
     // 1) Tomar selfie_path desde attendance
     const { data: rec, error: qErr } = await supabase

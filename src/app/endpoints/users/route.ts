@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createClient, type PostgrestError } from '@supabase/supabase-js';
+import { type PostgrestError } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
 import { buildLoginIndexes } from '@/lib/auth/login-normalize';
 import { LoginIndexSupport, runWithLoginIndexFallback, type LoginIndexValues } from '@/lib/auth/login-index-support';
 import { isDemoMode, demoUsers, demoSites } from '@/lib/demo/mockData';
+import { supabaseAdmin } from '@/lib/supabase';
 
 function getAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('supabaseKey is required.');
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  return supabaseAdmin();
 }
 
 function randomPassword(length = 10) {

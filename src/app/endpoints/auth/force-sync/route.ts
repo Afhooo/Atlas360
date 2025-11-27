@@ -1,10 +1,7 @@
 // src/app/endpoints/auth/force-sync/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
-
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { supabaseAdmin } from '@/lib/supabase';
 
 // === Config desde .env ===
 const DEFAULT_DOMAIN = process.env.LOGIN_DOMAIN || 'fenix.local';
@@ -40,7 +37,7 @@ export async function POST(req: NextRequest) {
     if (!username)
       return NextResponse.json({ ok: false, error: 'username requerido' }, { status: 400 });
 
-    const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
+    const admin = supabaseAdmin();
 
     // buscar usuario en people
     const { data: person, error } = await admin

@@ -1,12 +1,10 @@
 // RUTA: src/app/endpoints/vendedores/reporte/route.ts
 import { NextResponse } from 'next/server';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// --- TIPOS ---
-type SB = SupabaseClient<any, 'public', any>;
 type Order = {
   seller: string | null;        // telegram_username o nombre plano
   sales_user_id: string | null; // id de people
@@ -24,13 +22,6 @@ type SellerProfile = {
   telegram_username: string | null;
   role?: string | null;
 };
-
-// --- Supabase admin ---
-function sbAdmin(): SB {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 // --- Util: parseo de moneda ---
 function parseCurrency(value: string | number | null): number {
@@ -73,7 +64,7 @@ function canonicalBranch(raw?: string | null) {
 
 // --- HANDLER: fuerza SOLO ASESOR/ASESORA ---
 export async function GET() {
-  const sb = sbAdmin();
+  const sb = supabaseAdmin();
 
   try {
     // 1) Trae SOLO perfiles cuyo rol contenga "ASESOR" (captura ASESOR, ASESORA, ASESORES, etc.)

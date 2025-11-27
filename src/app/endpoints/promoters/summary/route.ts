@@ -1,16 +1,10 @@
 // /src/app/endpoints/promoters/summary/route.ts
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { isSupabaseTransientError } from '@/lib/supabase';
+import { isSupabaseTransientError, supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 /* ========= Tipos ========= */
 type SummaryRow = {
@@ -50,6 +44,7 @@ function last30(): { from: string; to: string } {
 
 export async function GET(req: Request) {
   try {
+    const supabase = supabaseAdmin();
     const url = new URL(req.url);
     const rawFrom = url.searchParams.get('from') || '';
     const rawTo = url.searchParams.get('to') || '';

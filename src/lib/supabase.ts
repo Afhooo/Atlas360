@@ -38,6 +38,7 @@ type SupabaseMockQuery<T = unknown> = {
   contains: (...args: any[]) => SupabaseMockQuery<T>;
   in: (...args: any[]) => SupabaseMockQuery<T>;
   not: (...args: any[]) => SupabaseMockQuery<T>;
+  or: (...args: any[]) => SupabaseMockQuery<T>;
   maybeSingle: () => Promise<SupabaseMockResponse<T>>;
   single: () => Promise<SupabaseMockResponse<T>>;
   insert: (...args: any[]) => Promise<SupabaseMockResponse<T>>;
@@ -62,6 +63,7 @@ function createMockQuery<T = unknown>(): SupabaseMockQuery<T> {
     contains: () => builder,
     in: () => builder,
     not: () => builder,
+    or: () => builder,
     maybeSingle: async () => ({ data: null, error: null, status: 200, statusText: 'OK', count: null }),
     single: async () => ({ data: null, error: null, status: 200, statusText: 'OK', count: null }),
     insert: async () => ({ data: null, error: null, status: 200, statusText: 'OK', count: null }),

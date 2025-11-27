@@ -1,17 +1,13 @@
 // src/app/endpoints/users/[id]/route.ts
 import { NextResponse } from 'next/server';
-import { createClient, type PostgrestError } from '@supabase/supabase-js';
+import { type PostgrestError } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
 import { LoginIndexSupport, runWithLoginIndexFallback, type LoginIndexValues } from '@/lib/auth/login-index-support';
 import { buildLoginIndexes } from '@/lib/auth/login-normalize';
+import { supabaseAdmin } from '@/lib/supabase';
 
 function getAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-  process.env.SUPABASE_SERVICE_ROLE_KEY||
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('supabaseKey is required.');
-  return createClient(url, key);
+  return supabaseAdmin();
 }
 
 const errorMessage = (err: unknown, fallback: string) => {
