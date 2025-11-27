@@ -1,17 +1,9 @@
 // src/app/endpoints/orders/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { isSupabaseTransientError, withSupabaseRetry } from '@/lib/supabase';
+import { supabaseAdmin, isSupabaseTransientError, withSupabaseRetry, type SupabaseClient } from '@/lib/supabase';
 import { geocodeFirstOSM, normalizeAddressForSantaCruz } from '@/lib/geocode';
 
 export const runtime = 'nodejs'; // Necesario para usar SERVICE_ROLE en Vercel
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE, {
-  auth: { persistSession: false },
-});
 
 type LocalOption = 'La Paz' | 'El Alto' | 'Cochabamba' | 'Santa Cruz' | 'Sucre';
 
@@ -72,6 +64,7 @@ function normalizeSalesRole(role: string | null | undefined): 'ASESOR' | 'PROMOT
 }
 
 async function resolveSalesRole(
+  supabase: SupabaseClient,
   sales_user_id: string | null | undefined,
   seller_role: string | null | undefined,
   seller_name: string | null | undefined
@@ -131,6 +124,7 @@ async function resolveSalesRole(
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = supabaseAdmin();
     const body = (await req.json()) as Payload | undefined;
     if (!body) {
       return NextResponse.json({ error: 'Cuerpo vacío' }, { status: 400 });
@@ -183,7 +177,7 @@ export async function POST(req: NextRequest) {
     // Si vino sales_role y NO es operativo, úsalo; si no, trata de resolver.
     const raw_sales_role =
       (sales_role && !isOperativeRole(sales_role) ? sales_role : null) ||
-      (await resolveSalesRole(sales_user_id, seller_role_clean, seller));
+      (await resolveSalesRole(supabase, sales_user_id, seller_role_clean, seller));
 
     const sales_role_final = normalizeSalesRole(raw_sales_role);
 
