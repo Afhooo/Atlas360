@@ -1,15 +1,8 @@
-// src/app/endpoints/orders/route.ts
+// src/app/endpoints/orders/[id]/assign/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE, {
-  auth: { persistSession: false },
-});
 
 type OrderItemIn = {
   product_code?: string | null;
@@ -62,6 +55,8 @@ const money = (n: number) => Number((Math.round(n * 100) / 100).toFixed(2));
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = supabaseAdmin();
+
     const body = (await req.json()) as Payload;
 
     // ---- Validaciones mínimas (compat con tu schema) ----
