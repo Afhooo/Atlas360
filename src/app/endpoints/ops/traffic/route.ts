@@ -19,10 +19,7 @@ type Incident = {
   source: 'here';
 };
 
-const HERE_API_KEY = process.env.HERE_API_KEY!;
-if (!HERE_API_KEY) {
-  console.warn('[traffic] Falta HERE_API_KEY en .env');
-}
+const HERE_API_KEY = process.env.HERE_API_KEY || '';
 
 const CACHE_TTL_MS = 3 * 60 * 1000;
 let cache: { timestamp: number; payload: any } | null = null;
