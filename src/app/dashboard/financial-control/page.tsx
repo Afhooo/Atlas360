@@ -26,6 +26,23 @@ const APPLE_COLORS = {
   teal: '#14b8a6',
 };
 
+// Mock de caja diaria y cuadraturas
+const DAILY_BOX = {
+  date: new Intl.DateTimeFormat('es-BO', { dateStyle: 'full' }).format(new Date()),
+  cashier: 'Cajero demo (Admin)',
+  shift: '08:00 – 18:00',
+  openedAt: '08:05',
+  status: 'Cuadrada',
+  difference: 0,
+  declared: 15100,
+  system: 15100,
+};
+
+const DAILY_CASHIERS = [
+  { name: 'Cajero demo', branch: 'Casa Matriz', shift: '08:00 – 18:00', status: 'Cuadrada', declared: 15100, system: 15100, difference: 0 },
+  { name: 'Suplente', branch: 'Sucursal Norte', shift: '10:00 – 18:00', status: 'En curso', declared: 0, system: 0, difference: 0 },
+];
+
 // === COMPONENTES UI ESPECIALIZADOS ===
 const StatCardWithComparison: React.FC<{
   title: string;
@@ -148,8 +165,8 @@ export default function FinancialControlPage() {
     <div className="min-h-screen space-y-8">
       <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
-          <h1 className="apple-h1 mb-1">Control Financiero</h1>
-          <p className="apple-body text-apple-gray-300">Análisis de rendimiento consolidado.</p>
+          <h1 className="apple-h1 mb-1">Caja diaria y control financiero</h1>
+          <p className="apple-body text-apple-gray-300">Responsables, turnos y cuadraturas por sucursal.</p>
         </div>
         <div className="w-full md:w-72">
           <label className="apple-caption text-apple-gray-400 mb-2">Mes de Análisis</label>
@@ -158,6 +175,27 @@ export default function FinancialControlPage() {
           </select>
         </div>
       </motion.header>
+
+      {/* Caja diaria y responsable */}
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <div className="glass-card grid gap-4 md:grid-cols-4">
+          <div className="md:col-span-2 space-y-2">
+            <div className="apple-caption text-apple-gray-400">Fecha</div>
+            <div className="apple-body font-semibold text-white">{DAILY_BOX.date}</div>
+            <div className="apple-caption text-apple-gray-400">Turno: {DAILY_BOX.shift} · Apertura: {DAILY_BOX.openedAt}</div>
+          </div>
+          <div className="space-y-1">
+            <div className="apple-caption text-apple-gray-400">Cajero responsable</div>
+            <div className="apple-body font-semibold text-white">{DAILY_BOX.cashier}</div>
+          </div>
+          <div className="space-y-1">
+            <div className="apple-caption text-apple-gray-400">Estado</div>
+            <div className={`apple-body font-semibold ${DAILY_BOX.difference === 0 ? 'text-apple-green-400' : 'text-apple-orange-300'}`}>
+              {DAILY_BOX.status} · Dif: Bs {DAILY_BOX.difference.toLocaleString('es-BO')}
+            </div>
+          </div>
+        </div>
+      </motion.section>
 
       <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -224,6 +262,45 @@ export default function FinancialControlPage() {
             </table>
         </div>
       </motion.div>
+
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+        <div className="glass-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="apple-body font-semibold text-white">Cuadratura por cajero (hoy)</h3>
+            <span className="apple-caption text-apple-gray-500">Turnos y diferencias declaradas</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="table-apple">
+              <thead>
+                <tr>
+                  <th>Cajero</th>
+                  <th>Sucursal</th>
+                  <th>Turno</th>
+                  <th>Estado</th>
+                  <th className="text-right">Declarado</th>
+                  <th className="text-right">Sistema</th>
+                  <th className="text-right">Diferencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DAILY_CASHIERS.map((row) => (
+                  <tr key={row.name}>
+                    <td className="font-medium text-white">{row.name}</td>
+                    <td>{row.branch}</td>
+                    <td>{row.shift}</td>
+                    <td className={row.difference === 0 ? 'text-apple-green-400' : 'text-apple-orange-300'}>{row.status}</td>
+                    <td className="text-right">Bs {row.declared.toLocaleString('es-BO')}</td>
+                    <td className="text-right">Bs {row.system.toLocaleString('es-BO')}</td>
+                    <td className={`text-right font-mono ${row.difference === 0 ? 'text-apple-green-400' : 'text-apple-red-400'}`}>
+                      Bs {row.difference.toLocaleString('es-BO')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </motion.section>
     </div>
   );
 }

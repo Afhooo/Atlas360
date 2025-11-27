@@ -1,11 +1,11 @@
 {
-  "name": "Atlas 360",
-  "short_name": "Atlas 360",
+  "name": "Atlas Suite",
+  "short_name": "Atlas Suite",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "description": "Sistema de gestión integral Atlas 360",
+  "description": "Sistema de gestión integral Atlas Suite",
   "icons": [
     {
       "src": "/icon.svg",

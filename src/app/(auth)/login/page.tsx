@@ -30,7 +30,7 @@ export default function LoginPage() {
  * Metadata para SEO y navegador
  */
 export const metadata = {
-  title: 'Iniciar Sesión - Atlas 360',
-  description: 'Accede al sistema de gestión integral de Atlas 360',
+  title: 'Iniciar Sesión - Atlas Suite',
+  description: 'Accede al sistema de gestión integral de Atlas Suite',
   robots: 'noindex, nofollow', // No indexar página de login
 };

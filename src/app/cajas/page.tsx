@@ -4,15 +4,23 @@ import { CheckCircle2, AlertTriangle, CircleDollarSign } from 'lucide-react';
 import { demoCajas } from '@/lib/demo/mockData';
 import { useDemoOps } from '@/lib/demo/state';
 
+type Cierre = (typeof demoCajas)[number] & { cajero?: string };
+
 export default function CajasPage() {
   const snapshot = useDemoOps();
-  const cierres = demoCajas.map((c, idx) =>
+  const cierres: Cierre[] = demoCajas.map((c, idx) =>
     idx === 0
       ? { ...c, declarado: snapshot.cash, sistema: snapshot.cash, estado: 'Cuadrado', diferencias: 0 }
       : c
   );
   const cuadradas = cierres.filter((c) => c.estado === 'Cuadrado').length;
   const pendientes = cierres.length - cuadradas;
+
+  const hoy = cierres[0];
+  const totalDeclarado = cierres.reduce((sum, c) => sum + (c.declarado || 0), 0);
+  const totalSistema = cierres.reduce((sum, c) => sum + (c.sistema || 0), 0);
+  const totalDiferencias = cierres.reduce((sum, c) => sum + (c.diferencias || 0), 0);
+  const diffPct = totalSistema === 0 ? 0 : (totalDiferencias / totalSistema) * 100;
 
   return (
     <div className="space-y-8">
@@ -23,10 +31,53 @@ export default function CajasPage() {
         </p>
       </header>
 
+      {hoy && (
+        <section className="glass-card p-4 sm:p-6 grid gap-4 md:grid-cols-4">
+          <div className="md:col-span-2 space-y-1">
+            <p className="apple-caption text-apple-gray-400">Fecha</p>
+            <p className="apple-body font-semibold text-white">{hoy.fecha}</p>
+            <p className="apple-caption text-apple-gray-500">Sucursal: {hoy.local}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="apple-caption text-apple-gray-400">Cajero responsable</p>
+            <p className="apple-body font-semibold text-white">{hoy.cajero || 'Cajero demo'}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="apple-caption text-apple-gray-400">Estado</p>
+            <p className={`apple-body font-semibold ${hoy.diferencias === 0 ? 'text-apple-green-300' : 'text-apple-orange-300'}`}>
+              {hoy.estado} · Dif: {money(hoy.diferencias)}
+            </p>
+          </div>
+        </section>
+      )}
+
       <section className="grid gap-4 sm:grid-cols-3">
         <Kpi icon={<CheckCircle2 size={18} />} label="Cuadradas" value={cuadradas} tone="green" />
         <Kpi icon={<AlertTriangle size={18} />} label="Con diferencia" value={pendientes} tone="orange" />
         <Kpi icon={<CircleDollarSign size={18} />} label="Cierres revisados" value={cierres.length} tone="blue" />
+      </section>
+
+      <section className="glass-card p-4 sm:p-6 grid gap-4 md:grid-cols-4">
+        <div className="md:col-span-2 space-y-2">
+          <h2 className="apple-h3 text-white">Resumen financiero del día</h2>
+          <p className="apple-caption text-apple-gray-400">
+            Consolidado de todas las cajas: declarado vs sistema y diferencia total.
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="apple-caption text-apple-gray-400">Total declarado</p>
+          <p className="font-mono text-sm text-white">{money(totalDeclarado)}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="apple-caption text-apple-gray-400">Total sistema</p>
+          <p className="font-mono text-sm text-white">{money(totalSistema)}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="apple-caption text-apple-gray-400">Diferencia global</p>
+          <p className={`font-mono text-sm ${totalDiferencias === 0 ? 'text-apple-green-300' : totalDiferencias < 0 ? 'text-apple-red-300' : 'text-apple-orange-300'}`}>
+            {money(totalDiferencias)} ({diffPct.toFixed(2)}%)
+          </p>
+        </div>
       </section>
 
       <section className="glass-card p-4 sm:p-6 space-y-4">

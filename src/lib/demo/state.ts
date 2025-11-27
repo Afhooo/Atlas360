@@ -21,6 +21,12 @@ type InventoryItem = {
   branch: string;
   stock: number;
   price?: number;
+  cost?: number;
+  category?: string;
+  type?: 'individual' | 'combo';
+  rotationDays?: number;
+  reorderPoint?: number;
+  components?: { id: string; name: string; qty: number }[];
 };
 
 type DemoState = {
@@ -29,15 +35,34 @@ type DemoState = {
   cash: number;
 };
 
+const fallbackPrice = (name: string, current?: number) => {
+  if (current && current > 0) return current;
+  if (/macbook/i.test(name)) return 8000;
+  if (/iphone/i.test(name)) return 5000;
+  if (/ipad/i.test(name)) return 3500;
+  if (/watch/i.test(name)) return 1500;
+  if (/airpods/i.test(name)) return 800;
+  return 600;
+};
+
+const baseInventorySnapshot = (): InventoryItem[] =>
+  demoInventory.products.map((p: any): InventoryItem => ({
+    id: String(p.id),
+    name: String(p.name),
+    sku: String(p.sku),
+    branch: String(p.branch),
+    stock: Number(p.stock ?? 0),
+    price: fallbackPrice(String(p.name), p.price),
+    cost: p.cost == null ? undefined : Number(p.cost),
+    category: p.category ?? undefined,
+    type: p.type === 'combo' ? 'combo' : 'individual',
+    rotationDays: p.rotationDays == null ? undefined : Number(p.rotationDays),
+    reorderPoint: p.reorderPoint == null ? undefined : Number(p.reorderPoint),
+    components: Array.isArray(p.components) ? p.components : undefined,
+  }));
+
 let state: DemoState = {
-  inventory: demoInventory.products.map((p) => ({
-    ...p,
-    price:
-      p.name.includes('iPhone') ? 2600 :
-      p.name.includes('MacBook') ? 7800 :
-      p.name.includes('Watch') ? 1200 :
-      p.name.includes('AirPods') ? 500 : 500,
-  })),
+  inventory: baseInventorySnapshot(),
   sales: [],
   cash: 0,
 };
@@ -86,13 +111,14 @@ export function useDemoOps() {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
+    () => state,
     () => state
   );
 }
 
 export function resetDemoState() {
   setState({
-    inventory: state.inventory.map((p) => ({ ...p, stock: demoInventory.products.find((d) => d.id === p.id)?.stock ?? p.stock })),
+    inventory: baseInventorySnapshot(),
     sales: [],
     cash: 0,
   });

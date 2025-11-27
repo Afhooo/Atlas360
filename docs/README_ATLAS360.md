@@ -1,7 +1,7 @@
-# Atlas 360 – Guía rápida
+# Atlas Suite – Guía rápida
 
 ## Visión
-Atlas 360 es una plataforma modular para operar ventas, inventarios, RRHH, productividad y cajas desde un solo lugar, con una navegación consistente y permisos por rol.
+Atlas Suite es una plataforma modular para operar ventas, inventarios, RRHH, productividad y cajas desde un solo lugar, con una navegación consistente y permisos por rol.
 
 ## Módulos
 - **Dashboard** (`/dashboard`): KPIs globales y listas recientes.

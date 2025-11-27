@@ -1,8 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, AlertCircle, ArrowRight, ShoppingBag, DollarSign, Package } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ArrowRight, ShoppingBag, DollarSign, Package, Layers, Sparkles } from 'lucide-react';
 import { useDemoOps, recordDemoSale } from '@/lib/demo/state';
+
+type InventoryItem = ReturnType<typeof useDemoOps>['inventory'][number];
 
 export default function RegistrarVentaPage() {
   const snapshot = useDemoOps();
@@ -12,6 +14,23 @@ export default function RegistrarVentaPage() {
 
   const [form, setForm] = useState({ productId: inventory[0]?.id ?? '', qty: 1, price: inventory[0]?.price ?? 0 });
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const groupedInventory = useMemo<Record<string, InventoryItem[]>>(() => {
+    return inventory.reduce<Record<string, InventoryItem[]>>((acc, item) => {
+      const key = item.category || (item.type === 'combo' ? 'Combos / Kits' : 'Otros');
+      acc[key] = acc[key] || [];
+      acc[key].push(item);
+      return acc;
+    }, {});
+  }, [inventory]);
+
+  const selectedProduct: InventoryItem | undefined = useMemo(
+    () => inventory.find((p) => p.id === form.productId),
+    [inventory, form.productId]
+  );
+  const suggestedPrice = selectedProduct?.price ?? form.price;
+  const totalPreview = Number(form.qty || 0) * Number(form.price || 0);
+  const marginPct = selectedProduct?.cost ? ((form.price - selectedProduct.cost) / selectedProduct.cost) * 100 : null;
 
   const totals = useMemo(() => {
     const soldItems = sales.reduce((sum, s) => sum + s.qty, 0);
@@ -71,9 +90,9 @@ export default function RegistrarVentaPage() {
             <span className="apple-body">{message.text}</span>
           </div>
         )}
-        <form className="grid gap-4 sm:grid-cols-3" onSubmit={handleSubmit}>
-          <label className="space-y-2 sm:col-span-2">
-            <span className="apple-caption text-apple-gray-400">Producto</span>
+        <form className="grid gap-4 lg:grid-cols-4" onSubmit={handleSubmit}>
+          <label className="space-y-2 lg:col-span-2">
+            <span className="apple-caption text-apple-gray-400">Producto / combo</span>
             <select
               className="input-apple w-full"
               value={form.productId}
@@ -82,22 +101,50 @@ export default function RegistrarVentaPage() {
                 setForm((prev) => ({ ...prev, productId: e.target.value, price: prod?.price ?? prev.price }));
               }}
             >
-              {inventory.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} — {p.branch} (stock {p.stock})
-                </option>
-              ))}
+              {Object.entries(groupedInventory)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([category, items]) => (
+                  <optgroup key={category} label={category}>
+                    {items.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {p.branch} · stock {p.stock}{p.type === 'combo' ? ' (Combo)' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
             </select>
           </label>
           <label className="space-y-2">
-            <span className="apple-caption text-apple-gray-400">Precio</span>
+            <span className="apple-caption text-apple-gray-400">Precio a facturar</span>
             <input
               className="input-apple w-full"
               type="number"
               min={1}
+              step="0.01"
               value={form.price}
               onChange={(e) => setForm((prev) => ({ ...prev, price: Number(e.target.value) }))}
             />
+            <div className="flex gap-2 text-apple-gray-500 text-xs">
+              <button
+                type="button"
+                className="underline decoration-dotted"
+                onClick={() => setForm((prev) => ({ ...prev, price: Number(suggestedPrice || prev.price) }))}
+              >
+                Usar lista ({money(suggestedPrice || 0)})
+              </button>
+              <button
+                type="button"
+                className="underline decoration-dotted"
+                onClick={() =>
+                  setForm((prev) => ({
+                    ...prev,
+                    price: Number(((prev.price || 0) * 0.95).toFixed(2)),
+                  }))
+                }
+              >
+                -5% promo
+              </button>
+            </div>
           </label>
           <label className="space-y-2">
             <span className="apple-caption text-apple-gray-400">Cantidad</span>
@@ -105,11 +152,24 @@ export default function RegistrarVentaPage() {
               className="input-apple w-full"
               type="number"
               min={1}
+              max={selectedProduct?.stock ?? undefined}
               value={form.qty}
               onChange={(e) => setForm((prev) => ({ ...prev, qty: Number(e.target.value) }))}
             />
+            {selectedProduct && (
+              <p className="apple-caption text-apple-gray-500">Stock disponible: {selectedProduct.stock} uds.</p>
+            )}
           </label>
-          <div className="sm:col-span-3 flex justify-end">
+          {selectedProduct && (
+            <div className="lg:col-span-4 grid gap-4 md:grid-cols-2">
+              <ProductSummaryCard product={selectedProduct} marginPct={marginPct} total={totalPreview} qty={form.qty} />
+            </div>
+          )}
+          <div className="lg:col-span-4 flex items-center justify-between border-t border-white/5 pt-4">
+            <div className="text-left">
+              <p className="apple-caption text-apple-gray-500">Total estimado</p>
+              <p className="apple-h3 text-white">{money(totalPreview)}</p>
+            </div>
             <button className="btn-primary" type="submit">
               Registrar y rebajar stock
             </button>
@@ -151,11 +211,18 @@ export default function RegistrarVentaPage() {
             {inventory.map((p) => (
               <div key={p.id} className="py-3 flex items-center justify-between">
                 <div>
-                  <div className="apple-body text-white font-semibold">{p.name}</div>
+                  <div className="apple-body text-white font-semibold flex items-center gap-2">
+                    {p.name}
+                    {p.type === 'combo' && (
+                      <span className="apple-caption px-2 py-0.5 rounded-full bg-apple-blue-500/20 border border-apple-blue-500/30 text-apple-blue-200">Combo</span>
+                    )}
+                  </div>
                   <div className="apple-caption text-apple-gray-400">{p.branch} · SKU {p.sku}</div>
                 </div>
                 <div className="text-right">
-                  <div className="apple-body text-white">{p.stock} unid</div>
+                  <div className={`apple-body ${p.stock <= (p.reorderPoint ?? 5) ? 'text-apple-orange-300' : 'text-white'}`}>
+                    {p.stock} unid
+                  </div>
                   <div className="apple-caption text-apple-gray-500">Precio ref. {money(p.price || 0)}</div>
                 </div>
               </div>
@@ -163,6 +230,86 @@ export default function RegistrarVentaPage() {
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function ProductSummaryCard({
+  product,
+  marginPct,
+  total,
+  qty,
+}: {
+  product: InventoryItem;
+  marginPct: number | null;
+  total: number;
+  qty: number;
+}) {
+  return (
+    <div className="glass-card p-4 border border-white/10 bg-white/5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="apple-caption text-apple-gray-400">Resumen de inventario</p>
+          <p className="apple-body text-white font-semibold">{product.name}</p>
+        </div>
+        <div className="p-2 rounded-apple bg-apple-blue-500/20 border border-apple-blue-500/30 text-apple-blue-200">
+          {product.type === 'combo' ? <Layers size={16} /> : <Package size={16} />}
+        </div>
+      </div>
+      <dl className="grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <dt className="apple-caption text-apple-gray-500">Sucursal</dt>
+          <dd className="text-white">{product.branch}</dd>
+        </div>
+        <div>
+          <dt className="apple-caption text-apple-gray-500">SKU</dt>
+          <dd className="text-white">{product.sku}</dd>
+        </div>
+        <div>
+          <dt className="apple-caption text-apple-gray-500">Stock</dt>
+          <dd className={product.stock <= (product.reorderPoint ?? 5) ? 'text-apple-orange-300' : 'text-white'}>
+            {product.stock} unidades
+          </dd>
+        </div>
+        <div>
+          <dt className="apple-caption text-apple-gray-500">Rotación</dt>
+          <dd className="text-white">{product.rotationDays ?? '—'} días</dd>
+        </div>
+        {product.cost && (
+          <div>
+            <dt className="apple-caption text-apple-gray-500">Costo reposición</dt>
+            <dd className="text-white">{money(product.cost)}</dd>
+          </div>
+        )}
+        <div>
+          <dt className="apple-caption text-apple-gray-500">Cantidad pedido</dt>
+          <dd className="text-white">{qty} unid.</dd>
+        </div>
+        <div>
+          <dt className="apple-caption text-apple-gray-500">Total estimado</dt>
+          <dd className="text-white">{money(total)}</dd>
+        </div>
+        {marginPct !== null && (
+          <div>
+            <dt className="apple-caption text-apple-gray-500">Margen</dt>
+            <dd className={marginPct < 15 ? 'text-apple-orange-300' : 'text-apple-green-300'}>
+              {marginPct.toFixed(1)}%
+            </dd>
+          </div>
+        )}
+      </dl>
+      {product.components && product.components.length > 0 && (
+        <div className="mt-4 rounded-apple bg-white/5 border border-white/10 p-3">
+          <p className="apple-caption text-apple-gray-400 mb-2 flex items-center gap-1">
+            <Sparkles size={14} /> Este combo incluye:
+          </p>
+          <ul className="list-disc list-inside text-apple-gray-200 text-sm space-y-1">
+            {product.components.map((component) => (
+              <li key={`${product.id}-${component.id}`}>{component.qty} × {component.name}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

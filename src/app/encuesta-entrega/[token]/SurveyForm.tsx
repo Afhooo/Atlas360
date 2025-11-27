@@ -85,7 +85,7 @@ export default function SurveyForm({ token, customerName, orderNo }: SurveyFormP
       <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-6 py-8 text-white shadow-lg">
         <h2 className="text-2xl font-semibold mb-2">¡Gracias por tu respuesta!</h2>
         <p className="text-white/75 text-sm leading-relaxed">
-          Tu opinión nos ayuda a mejorar cada entrega. El equipo de Atlas 360 revisará tu feedback.
+          Tu opinión nos ayuda a mejorar cada entrega. El equipo de Atlas Suite revisará tu feedback.
         </p>
       </div>
     );
@@ -101,7 +101,7 @@ export default function SurveyForm({ token, customerName, orderNo }: SurveyFormP
           Hola {shortName}, cuéntanos sobre tu entrega{orderNo ? ` #${orderNo}` : ''}.
         </h2>
         <p className="text-white/70 text-sm mt-2">
-          Solo te tomará un minuto. Las respuestas nos ayudan a mejorar la experiencia para ti y toda la comunidad Atlas 360.
+          Solo te tomará un minuto. Las respuestas nos ayudan a mejorar la experiencia para ti y toda la comunidad Atlas Suite.
         </p>
       </div>
 

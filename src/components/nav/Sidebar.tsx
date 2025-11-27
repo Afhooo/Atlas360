@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, BarChart3, Users, UserPlus, Package,
   RotateCcw, Calendar, FileText, Settings, CheckCircle2,
-  LogOut, ChevronRight, Sparkles, Activity, ShieldCheck, Route
+  LogOut, ChevronRight, Sparkles, Activity, ShieldCheck, Route, HelpCircle
 } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
 import { useState, useEffect } from 'react';
@@ -64,29 +64,31 @@ const NavLink: FC<{ item: NavLinkItem; active?: boolean; onClick?: () => void }>
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={[
-        'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-apple-body font-medium min-w-0',
-        'transition-all duration-300 ease-apple',
-        'hover:bg-[color:var(--hover-surface)] hover:backdrop-blur-sm dark:hover:bg-white/10',
+        'group relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-[10px] text-[12px] font-medium min-w-0 border border-transparent',
+        'transition-all duration-200 ease-apple',
+        'hover:bg-black/4 hover:border-black/6 hover:backdrop-blur-apple-sm',
         active
-          ? 'text-[color:var(--app-foreground)] dark:text-white bg-gradient-to-r from-apple-blue-500/10 to-apple-green-500/10 dark:from-apple-blue-600/20 dark:to-apple-blue-500/10 border border-[color:var(--app-border-strong)] dark:border-apple-blue-500/30 shadow-[0_8px_24px_rgba(36,99,235,0.18)] dark:shadow-primary'
-          : 'text-apple-gray-600 hover:text-[color:var(--app-foreground)] dark:text-apple-gray-300 dark:hover:text-white',
+          ? 'text-[#0a0f1a] bg-white border-black/8 shadow-[0_4px_12px_rgba(15,23,42,0.08)] dark:text-white dark:bg-white/[0.06] dark:border-white/15 dark:shadow-none'
+          : 'text-apple-gray-600 hover:text-[#0a0f1a] dark:text-apple-gray-400 dark:hover:text-white',
       ].join(' ')}
       title={item.label}
     >
       {active && (
         <motion.div
           layoutId="activeIndicator"
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-apple-blue-400 to-apple-blue-600 rounded-r-full"
+          className="absolute -left-1 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-full bg-black/30 dark:bg-apple-blue-400"
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
         />
       )}
       <div className={[
-        'relative flex items-center justify-center w-5 h-5 transition-transform duration-300',
-        active ? 'text-apple-blue-400' : 'text-current group-hover:scale-110',
+        'relative flex items-center justify-center w-4 h-4 transition-transform duration-300',
+        active ? 'text-[#0a0f1a] dark:text-apple-blue-400' : 'text-[#1f2937] group-hover:scale-110 dark:text-current',
       ].join(' ')}>
         {item.icon}
       </div>
-      <span className="flex-1 min-w-0 text-left whitespace-normal leading-tight break-words">{item.label}</span>
+      <span className="flex-1 min-w-0 text-left whitespace-normal leading-tight break-words text-[12px]">
+        {item.label}
+      </span>
       {item.shortcut && (
         <kbd className={[
           'text-apple-caption2 font-mono px-1.5 py-0.5 rounded border transition-all duration-300',
@@ -114,9 +116,11 @@ const NavLink: FC<{ item: NavLinkItem; active?: boolean; onClick?: () => void }>
 );
 
 const SectionHeader: FC<{ title: string; icon?: ReactNode }> = ({ title, icon }) => (
-  <div className="flex items-center gap-2 px-3 py-2 mb-2">
-    {icon && (<div className="text-apple-gray-500">{icon}</div>)}
-    <h3 className="text-apple-caption1 font-semibold text-apple-gray-500 tracking-wider uppercase">{title}</h3>
+  <div className="flex items-center gap-1.5 px-3 py-1.5 mb-1.5">
+    {icon && (<div className="text-apple-gray-500 dark:text-apple-gray-400">{icon}</div>)}
+    <h3 className="text-apple-caption1 font-semibold tracking-wider uppercase text-[11px] text-[#0a0f1a] dark:text-apple-gray-300">
+      {title}
+    </h3>
   </div>
 );
 
@@ -149,8 +153,11 @@ export const Sidebar: FC<SidebarProps> = ({
       icon: <Home size={12} />,
       items: [
         { href: '/dashboard', icon: <Home size={18} />, label: 'Dashboard', shortcut: 'H', module: 'dashboard' },
+        { href: '/clientes', icon: <Users size={18} />, label: 'Clientes', module: 'ventas' },
+        { href: '/oportunidades', icon: <Activity size={18} />, label: 'Pipeline', module: 'ventas' },
         { href: '/ventas', icon: <BarChart3 size={18} />, label: 'Ventas (análisis)', shortcut: 'V', module: 'ventas' },
-        { href: '/ventas/registro', icon: <UserPlus size={18} />, label: 'Registrar venta', module: 'ventas' },
+        { href: '/ventas/registro-crm', icon: <UserPlus size={18} />, label: 'Registrar venta', module: 'ventas' },
+        { href: '/analisis', icon: <Sparkles size={18} />, label: 'Análisis IA', module: 'ventas' },
         { href: '/inventario', icon: <Package size={18} />, label: 'Inventario', shortcut: 'I', module: 'inventario' },
         { href: '/logistica', icon: <Route size={18} />, label: 'Logística', shortcut: 'L', module: 'inventario', req: 'view:logistica' },
       ],
@@ -166,6 +173,12 @@ export const Sidebar: FC<SidebarProps> = ({
           shortcut: 'F',
           module: 'cajas',
           requiresPersonId: [...FINANCIAL_CONTROL_IDS],
+        },
+        {
+          href: '/cajas',
+          icon: <CheckCircle2 size={18} />,
+          label: 'Caja diaria',
+          module: 'cajas',
         },
       ],
     },
@@ -185,6 +198,13 @@ export const Sidebar: FC<SidebarProps> = ({
         { href: '/configuracion/usuarios', icon: <Settings size={18} />, label: 'Usuarios y roles', shortcut: '8', module: 'configuracion' },
       ],
     },
+    {
+      title: 'Soporte',
+      icon: <HelpCircle size={12} />,
+      items: [
+        { href: '/ayuda', icon: <HelpCircle size={18} />, label: 'Ayuda / FAQs' },
+      ],
+    },
   ];
 
   return (
@@ -194,25 +214,29 @@ export const Sidebar: FC<SidebarProps> = ({
         animate={{ x: isOpen || typeof window === 'undefined' || window.innerWidth >= 1024 ? 0 : -320 }}
         exit={{ x: -320 }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className="fixed left-0 top-0 h-screen w-80 z-50 flex flex-col glass backdrop-blur-apple-lg border-r border-[color:var(--app-border)] dark:border-white/10 transition-colors duration-500 lg:translate-x-0 lg:static lg:z-30"
+        className="fixed left-0 top-0 h-screen w-64 z-50 flex flex-col sidebar-shell transition-colors duration-500 lg:translate-x-0 lg:static lg:z-30 text-[12px]"
       >
-        <div className="p-6 border-b border-[color:var(--app-border)] dark:border-white/10 transition-colors duration-500">
-          <Link href={ROUTES.DASH} className="group flex items-center gap-3" onClick={onClose}>
-            <div className="relative w-10 h-10">
+        <div className="px-4 py-4 border-b border-[color:var(--app-border)] dark:border-white/10 transition-colors duration-500">
+          <Link href={ROUTES.DASH} className="group flex items-center gap-2.5" onClick={onClose}>
+            <div className="relative w-9 h-9">
               <div className="absolute inset-0 bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 rounded-xl border border-white/20" />
               <div className="relative w-full h-full flex items-center justify-center">
-                <Image src="/1.png" alt="Atlas 360" width={24} height={24} className="object-contain" priority />
+                <Image src="/1.png" alt="Atlas Suite" width={24} height={24} className="object-contain" priority />
               </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="apple-h3 text-white group-hover:text-apple-blue-300 transition-colors duration-300">Atlas 360</div>
-              <div className="text-apple-caption text-apple-gray-500 -mt-0.5">Sistema de gestión</div>
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="text-[13px] font-semibold text-white group-hover:text-apple-blue-300 transition-colors duration-300">
+                Atlas Suite
+              </div>
+              <div className="text-apple-caption text-apple-gray-500 -mt-0.5">
+                Sistema de gestión
+              </div>
             </div>
             <Sparkles size={16} className="text-apple-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </Link>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-6 overflow-y-auto scrollbar-thin transition-colors duration-500">
+        <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto scrollbar-thin transition-colors duration-500">
           {SECTIONS.map((section) => {
           const items = section.items.filter((item) => {
             if (item.module && (!moduleFlags[item.module] || !canAccessModule(userRole, item.module))) {
@@ -251,21 +275,23 @@ export const Sidebar: FC<SidebarProps> = ({
           })}
         </nav>
 
-        <div className="p-4 mt-auto space-y-3 border-t border-[color:var(--app-border)] dark:border-white/10">
+        <div className="p-3 mt-auto space-y-3 border-t border-[color:var(--app-border)] dark:border-white/10">
           <ThemeToggle />
 
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="flex items-center gap-3 p-3 rounded-xl transition-all duration-300 bg-[color:var(--glass-card-bg,rgba(255,255,255,0.7))] hover:bg-[color:var(--hover-surface)] dark:bg-white/5 dark:hover:bg-white/10"
+            className="flex items-center gap-2.5 p-2.5 rounded-xl transition-all duration-300 bg-[color:var(--glass-card-bg,rgba(255,255,255,0.7))] hover:bg-[color:var(--hover-surface)] dark:bg-white/5 dark:hover:bg-white/10"
           >
             <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-apple-blue-500/30 to-apple-green-500/30 flex items-center justify-center text-apple-body font-semibold text-[color:var(--app-foreground)] dark:text-white border border-[color:var(--app-border)] dark:border-white/20">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-apple-blue-500/30 to-apple-green-500/30 flex items-center justify-center text-[12px] font-semibold text-[color:var(--app-foreground)] dark:text-white border border-[color:var(--app-border)] dark:border-white/20">
                 {userName?.charAt(0)?.toUpperCase() || 'U'}
               </div>
               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-apple-green-500 rounded-full border-2 border-[color:var(--app-bg)] dark:border-black" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-apple-body font-medium text-[color:var(--app-foreground)] dark:text-white truncate">{userName || 'Usuario'}</div>
+              <div className="text-[12px] font-medium text-[color:var(--app-foreground)] dark:text-white truncate">
+                {userName || 'Usuario'}
+              </div>
               <div className="text-apple-caption text-apple-gray-500 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-apple-green-400 animate-pulse" />
                 En línea
@@ -273,8 +299,8 @@ export const Sidebar: FC<SidebarProps> = ({
             </div>
           </motion.div>
 
-          <LogoutButton className="w-full btn-ghost justify-start gap-3 text-apple-gray-500 hover:text-[color:var(--app-foreground)] dark:hover:text-white hover:bg-[color:var(--hover-surface)] dark:hover:bg-apple-red-600/10 hover:border-[color:var(--app-border-strong)] dark:hover:border-apple-red-500/30">
-            <LogOut size={18} />
+          <LogoutButton className="w-full btn-ghost justify-start gap-2.5 text-apple-gray-500 hover:text-[color:var(--app-foreground)] dark:hover:text-white hover:bg-[color:var(--hover-surface)] dark:hover:bg-apple-red-600/10 hover:border-[color:var(--app-border-strong)] dark:hover:border-apple-red-500/30 text-[12px]">
+            <LogOut size={16} />
             <span>Cerrar sesión</span>
           </LogoutButton>
         </div>

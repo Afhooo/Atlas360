@@ -142,7 +142,7 @@ export async function POST(
 
   const shortName = customerName?.split(' ')?.[0] ?? 'Cliente';
   const message = [
-    `Hola ${shortName}! Gracias por confiar en Atlas 360.`,
+    `Hola ${shortName}! Gracias por confiar en Atlas Suite.`,
     '¿Podrías ayudarnos con una encuesta rápida sobre tu entrega?',
     surveyUrl,
   ].join(' ');

@@ -25,7 +25,19 @@ const errorMessage = (err: unknown, fallback: string) => {
 
 const PEOPLE_SITE_CHECK = 'people_site_required_except_promotor';
 const PEOPLE_ROLE_CHECK = 'people_role_check';
-const ALLOWED_ROLES = ['ADMIN', 'GERENCIA', 'COORDINADOR', 'LIDER', 'ASESOR', 'PROMOTOR', 'LOGISTICA'] as const;
+const ALLOWED_ROLES = [
+  'ADMIN',
+  'GERENCIA',
+  'ADMINISTRADOR',
+  'GERENTE',
+  'COORDINADOR',
+  'LIDER',
+  'ASESOR',
+  'VENDEDOR',
+  'PROMOTOR',
+  'LOGISTICA',
+  'CAJERO',
+] as const;
 const loginIndexSupport = new LoginIndexSupport();
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -152,7 +164,9 @@ export async function GET(req: Request) {
     }
 
     // NOTE: branch_id es alias de local
-    let query = supabase
+    const supabaseClient = supabase!;
+
+    let query = supabaseClient
       .from('people')
       .select(
         `
@@ -199,10 +213,10 @@ export async function GET(req: Request) {
     const siteNameMap = new Map<string, string>();
 
     if (siteIds.length) {
-      const { data: sites, error: siteErr } = await supabase
-        .from('sites')
-        .select('id, name')
-        .in('id', siteIds);
+      const { data: sites, error: siteErr } = await supabaseClient
+      .from('sites')
+      .select('id, name')
+      .in('id', siteIds);
 
       if (siteErr) {
         console.warn('[users] site lookup failed:', siteErr);

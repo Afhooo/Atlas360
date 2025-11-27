@@ -7,169 +7,319 @@ const DEMO_FLAG = process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || process.env.DE
 export const isDemoMode = () => DEMO_FLAG || !SUPABASE_CONFIG.isConfigured;
 
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/La_Paz' }).format(new Date());
-const month = today.slice(0, 7);
-
 const daysAgo = (n: number) => {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - n);
   return d.toISOString();
 };
 
-export const demoSalesSummary = [
-  { summary_date: `${month}-01`, branch: 'Santa Cruz', total_revenue: 18250, total_products_sold: 96 },
-  { summary_date: `${month}-02`, branch: 'La Paz', total_revenue: 14500, total_products_sold: 74 },
-  { summary_date: `${month}-03`, branch: 'Cochabamba', total_revenue: 9800, total_products_sold: 52 },
-  { summary_date: today, branch: 'Online', total_revenue: 12350, total_products_sold: 61 },
+type SellerProfile = {
+  id: string;
+  fullName: string;
+  branch: string;
+  role: string;
+  channel: 'Asesor' | 'Promotor' | 'Tienda/Caja';
+};
+
+type ProductSpec = {
+  name: string;
+  basePrice: number;
+  imageUrl?: string | null;
+};
+
+const SELLERS: SellerProfile[] = [
+  { id: 'admin-demo-id', fullName: 'Ana Delgado', branch: 'Santa Cruz', role: 'ADMIN', channel: 'Asesor' },
+  { id: 'coordinator-demo-id', fullName: 'Carlos Rivera', branch: 'La Paz', role: 'COORDINADOR', channel: 'Tienda/Caja' },
+  { id: 'asesor-demo-id', fullName: 'Gabriela Rojas', branch: 'Cochabamba', role: 'ASESOR', channel: 'Asesor' },
+  { id: 'promotor-demo-id', fullName: 'Marcos Aguirre', branch: 'Santa Cruz', role: 'PROMOTOR', channel: 'Promotor' },
+  { id: 'caja-demo-id', fullName: 'Nora Ibarra', branch: 'La Paz', role: 'CAJA', channel: 'Tienda/Caja' },
 ];
 
-export const demoSalesReport = [
-  {
-    product_name: 'iPhone 15 Pro',
-    quantity: 2,
-    subtotal: 5200,
-    product_image_url: null,
-    order_id: 'ORD-1001',
-    order_no: 1001,
-    order_date: daysAgo(0),
-    branch: 'Santa Cruz',
-    seller_full_name: 'Ana Delgado',
-    seller_role: 'ADMIN',
-    channel: 'Asesor',
-  },
-  {
-    product_name: 'MacBook Air M3',
-    quantity: 1,
-    subtotal: 7800,
-    product_image_url: null,
-    order_id: 'ORD-1002',
-    order_no: 1002,
-    order_date: daysAgo(1),
-    branch: 'La Paz',
-    seller_full_name: 'Carlos Rivera',
-    seller_role: 'ADMIN',
-    channel: 'Tienda/Caja',
-  },
-  {
-    product_name: 'Apple Watch S9',
-    quantity: 3,
-    subtotal: 2100,
-    product_image_url: null,
-    order_id: 'ORD-1003',
-    order_no: 1003,
-    order_date: daysAgo(2),
-    branch: 'Cochabamba',
-    seller_full_name: 'Gabriela Rojas',
-    seller_role: 'ADMIN',
-    channel: 'Promotor',
-  },
-  {
-    product_name: 'AirPods Pro',
-    quantity: 4,
-    subtotal: 1200,
-    product_image_url: null,
-    order_id: 'ORD-1004',
-    order_no: 1004,
-    order_date: daysAgo(3),
-    branch: 'Santa Cruz',
-    seller_full_name: 'Equipo Atlas',
-    seller_role: 'ADMIN',
-    channel: 'Asesor',
-  },
+const PRODUCTS: ProductSpec[] = [
+  { name: 'iPhone 15 Pro', basePrice: 5200 },
+  { name: 'MacBook Air M3', basePrice: 7800 },
+  { name: 'Apple Watch Series 9', basePrice: 2100 },
+  { name: 'AirPods Pro (2da gen)', basePrice: 1200 },
+  { name: 'iPad Air M2', basePrice: 3600 },
+  { name: 'MacBook Pro 14" M3', basePrice: 10800 },
 ];
 
-export const demoReturnsReport = [
-  {
-    return_id: 501,
-    order_no: 1002,
-    return_date: today,
-    branch: 'La Paz',
-    seller_name: 'Carlos Rivera',
-    customer_name: 'Lucía Paredes',
-    product_name: 'MacBook Air M3',
-    quantity: 1,
-    return_amount: 7800,
-    reason: 'Cambio por defecto de fábrica',
-    return_method: 'Reingreso a inventario',
-    return_proof_url: null,
-  },
-  {
-    return_id: 502,
-    order_no: 1003,
-    return_date: today,
-    branch: 'Cochabamba',
-    seller_name: 'Gabriela Rojas',
-    customer_name: 'José Durán',
-    product_name: 'Apple Watch S9',
-    quantity: 1,
-    return_amount: 700,
-    reason: 'Error en talla de correa',
-    return_method: 'Nota de crédito',
-    return_proof_url: null,
-  },
+const CUSTOMERS = ['Mariana Suárez', 'José Durán', 'Lucía Paredes', 'Andrea Nava', 'Diego Céspedes', 'Martha Aguilar'];
+const RETURN_REASONS = [
+  'Cambio de color solicitado',
+  'Producto con detalles estéticos',
+  'Cliente decidió cambiar de modelo',
+  'Garantía aprobada',
+  'Entrega fuera de tiempo',
 ];
+const RETURN_METHODS = ['Reingreso a inventario', 'Nota de crédito', 'Devolución parcial'];
 
-export const demoTodayReturns = { count: demoReturnsReport.length, amount: demoReturnsReport.reduce((s, r) => s + r.return_amount, 0) };
+const SIMULATION_DAYS = 90;
 
-export const demoMySales = {
+const SIMULATION_REFERENCE = new Date();
+SIMULATION_REFERENCE.setUTCHours(0, 0, 0, 0);
+const SIMULATION_START = new Date(SIMULATION_REFERENCE);
+SIMULATION_START.setUTCDate(SIMULATION_START.getUTCDate() - (SIMULATION_DAYS - 1));
+
+function createRng(seed: number) {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const rng = createRng(20240909);
+const pad = (n: number) => String(n).padStart(2, '0');
+const pick = <T,>(items: T[]): T => items[Math.floor(rng() * items.length)];
+
+type DemoSaleRecord = {
+  product_name: string;
+  quantity: number;
+  subtotal: number;
+  product_image_url: string | null;
+  order_id: string;
+  order_no: number;
+  order_date: string;
+  branch: string;
+  seller_full_name: string;
+  seller_role: string;
+  channel: 'Asesor' | 'Promotor' | 'Tienda/Caja';
+  delivery_date: string | null;
+  payment_proof_url: string | null;
+  sale_type: 'Por Mayor' | 'Al Detalle';
+  order_type: 'Pedido' | 'Encomienda';
+};
+
+type DemoSalesSummaryRow = {
+  summary_date: string;
+  branch: string;
+  total_revenue: number;
+  total_products_sold: number;
+  cantidad_productos: number;
+};
+
+function generateSalesData() {
+  const sales: DemoSaleRecord[] = [];
+  const summary = new Map<string, DemoSalesSummaryRow>();
+  let orderSeq = 2400;
+
+  for (let day = 0; day < SIMULATION_DAYS; day += 1) {
+    const baseDate = new Date(SIMULATION_START);
+    baseDate.setUTCDate(baseDate.getUTCDate() + day);
+    const isoDay = baseDate.toISOString().slice(0, 10);
+    const salesCount = 3 + Math.floor(rng() * 4);
+
+    for (let i = 0; i < salesCount; i += 1) {
+      const seller = i === 0 ? SELLERS[0] : pick(SELLERS);
+      const product = pick(PRODUCTS);
+      const qty = 1 + Math.floor(rng() * 3);
+      const price = Math.round(product.basePrice * (0.9 + rng() * 0.25));
+      const subtotal = price * qty;
+      const hour = 8 + Math.floor(rng() * 10);
+      const minute = Math.floor(rng() * 60);
+      const orderMoment = new Date(`${isoDay}T${pad(hour)}:${pad(minute)}:00Z`);
+      const orderNo = orderSeq++;
+      const sale_type: DemoSaleRecord['sale_type'] = qty >= 3 ? 'Por Mayor' : 'Al Detalle';
+      const order_type: DemoSaleRecord['order_type'] = rng() > 0.7 ? 'Encomienda' : 'Pedido';
+
+      sales.push({
+        product_name: product.name,
+        quantity: qty,
+        subtotal,
+        product_image_url: product.imageUrl ?? null,
+        order_id: `ORD-${orderNo}`,
+        order_no: orderNo,
+        order_date: orderMoment.toISOString(),
+        branch: seller.branch,
+        seller_full_name: seller.fullName,
+        seller_role: seller.role,
+        channel: seller.channel,
+        delivery_date: null,
+        payment_proof_url: null,
+        sale_type,
+        order_type,
+      });
+
+      const monthKey = isoDay.slice(0, 7);
+      const summaryKey = `${monthKey}-${seller.branch}`;
+      const existing = summary.get(summaryKey);
+      if (existing) {
+        existing.total_revenue += subtotal;
+        existing.total_products_sold += qty;
+        existing.cantidad_productos = existing.total_products_sold;
+      } else {
+        summary.set(summaryKey, {
+          summary_date: `${monthKey}-01`,
+          branch: seller.branch,
+          total_revenue: subtotal,
+          total_products_sold: qty,
+          cantidad_productos: qty,
+        });
+      }
+    }
+  }
+
+  sales.sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
+  const summaryRows = Array.from(summary.values()).sort(
+    (a, b) => new Date(a.summary_date).getTime() - new Date(b.summary_date).getTime()
+  );
+
+  return { salesReport: sales, salesSummary: summaryRows };
+}
+
+const generatedSalesData = generateSalesData();
+export const demoSalesReport = generatedSalesData.salesReport;
+export const demoSalesSummary = generatedSalesData.salesSummary;
+
+type DemoReturnRecord = {
+  return_id: number;
+  order_no: number;
+  return_date: string;
+  branch: string;
+  seller_name: string;
+  customer_name: string;
+  product_name: string;
+  quantity: number;
+  return_amount: number;
+  reason: string;
+  return_method: string;
+  return_proof_url: string | null;
+};
+
+function generateReturnsData(sourceSales: DemoSaleRecord[]): DemoReturnRecord[] {
+  const returns: DemoReturnRecord[] = [];
+  const step = Math.max(1, Math.floor(sourceSales.length / 24));
+
+  for (let idx = 0; idx < sourceSales.length; idx += step) {
+    const sale = sourceSales[idx];
+    if (!sale) continue;
+    const returnDate = new Date(sale.order_date);
+    returnDate.setUTCDate(returnDate.getUTCDate() + Math.floor(rng() * 6));
+    if (returnDate > SIMULATION_REFERENCE) {
+      returnDate.setTime(SIMULATION_REFERENCE.getTime());
+    }
+
+    returns.push({
+      return_id: 500 + returns.length,
+      order_no: sale.order_no,
+      return_date: returnDate.toISOString().slice(0, 10),
+      branch: sale.branch,
+      seller_name: sale.seller_full_name || 'Equipo Atlas',
+      customer_name: pick(CUSTOMERS),
+      product_name: sale.product_name,
+      quantity: sale.quantity,
+      return_amount: Math.round(sale.subtotal * (0.85 + rng() * 0.2)),
+      reason: pick(RETURN_REASONS),
+      return_method: pick(RETURN_METHODS),
+      return_proof_url: null,
+    });
+  }
+
+  return returns.sort((a, b) => new Date(b.return_date).getTime() - new Date(a.return_date).getTime());
+}
+
+export const demoReturnsReport = generateReturnsData(demoSalesReport);
+const todaysReturns = demoReturnsReport.filter((r) => r.return_date === today);
+export const demoTodayReturns = {
+  count: todaysReturns.length,
+  amount: todaysReturns.reduce((sum, r) => sum + r.return_amount, 0),
+};
+
+function buildDemoMySales(primarySellerName: string) {
+  const listSource = demoSalesReport.filter((sale) => sale.seller_full_name === primarySellerName).slice(0, 60);
+  const total = listSource.reduce((sum, sale) => sum + sale.subtotal, 0);
+  const productTotals = new Map<string, { qty: number; total: number }>();
+
+  listSource.forEach((sale) => {
+    const current = productTotals.get(sale.product_name) ?? { qty: 0, total: 0 };
+    current.qty += sale.quantity;
+    current.total += sale.subtotal;
+    productTotals.set(sale.product_name, current);
+  });
+
+  const topProducts = Array.from(productTotals.entries())
+    .map(([name, stats]) => ({ name, qty: stats.qty, total: stats.total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3);
+
+  return {
+    ok: true,
+    kpis: {
+      ventas: listSource.length,
+      pedidos: listSource.length,
+      total: Math.round(total),
+    },
+    topProducts,
+    list: listSource.map((sale, idx) => ({
+      id: `MY-${idx + 1}`,
+      order_id: sale.order_id,
+      order_date: sale.order_date,
+      product_name: sale.product_name,
+      qty: sale.quantity,
+      total: sale.subtotal,
+      person_id: 'admin-demo-id',
+      kind: sale.channel === 'Promotor' ? 'promoter' : 'order',
+      approval_status: 'approved',
+      approved_by: 'admin-demo-id',
+    })),
+  };
+}
+
+export const demoMySales = buildDemoMySales(SELLERS[0].fullName);
+
+function buildDemoAttendanceDays(count: number) {
+  const records: {
+    date: string;
+    marks: unknown[];
+    first_in: string;
+    last_out: string;
+    lunch_out: string | null;
+    lunch_in: string | null;
+    lunch_minutes: number;
+    worked_minutes: number;
+  }[] = [];
+
+  for (let day = 0; day < count; day += 1) {
+    const base = new Date(SIMULATION_REFERENCE);
+    base.setUTCDate(base.getUTCDate() - day);
+    const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/La_Paz' }).format(base);
+    const firstIn = new Date(base);
+    firstIn.setUTCHours(12, Math.floor(5 + rng() * 40), 0, 0);
+    const lastOut = new Date(base);
+    lastOut.setUTCHours(20, Math.floor(5 + rng() * 30), 0, 0);
+
+    records.push({
+      date: dateStr,
+      marks: [],
+      first_in: firstIn.toISOString(),
+      last_out: lastOut.toISOString(),
+      lunch_out: null,
+      lunch_in: null,
+      lunch_minutes: 45 + Math.round((rng() - 0.5) * 10),
+      worked_minutes: Math.max(360, 450 + Math.round((rng() - 0.5) * 40)),
+    });
+  }
+
+  return records;
+}
+
+const attendanceDays = buildDemoAttendanceDays(SIMULATION_DAYS);
+export const demoAttendance = {
   ok: true,
-  kpis: { ventas: 3, pedidos: 3, total: 14300 },
-  topProducts: [
-    { name: 'iPhone 15 Pro', qty: 2, total: 5200 },
-    { name: 'MacBook Air M3', qty: 1, total: 7800 },
-    { name: 'AirPods Pro', qty: 4, total: 1200 },
-  ],
-  list: demoSalesReport.map((s, idx) => ({
-    id: `MY-${idx + 1}`,
-    order_id: s.order_id,
-    order_date: s.order_date,
-    product_name: s.product_name,
-    qty: s.quantity,
-    total: s.subtotal,
-    person_id: 'admin-demo-id',
-    kind: s.channel === 'Promotor' ? 'promoter' : 'order',
-    approval_status: 'approved',
-    approved_by: 'admin-demo-id',
-  })),
+  kpis: {
+    dias_con_marca: attendanceDays.length,
+    entradas: attendanceDays.length,
+    salidas: attendanceDays.length,
+    pct_geocerca_ok: 98,
+  },
+  days: attendanceDays,
+  raw: [],
 };
 
 const todayIso = new Date().toISOString();
-export const demoAttendance = {
-  ok: true,
-  kpis: { dias_con_marca: 3, entradas: 3, salidas: 3, pct_geocerca_ok: 100 },
-  days: [
-    {
-      date: today,
-      marks: [],
-      first_in: todayIso,
-      last_out: todayIso,
-      lunch_out: null,
-      lunch_in: null,
-      lunch_minutes: 45,
-      worked_minutes: 480,
-    },
-    {
-      date: today.replace(/\d+$/, (d) => String(Math.max(1, Number(d) - 1)).padStart(2, '0')),
-      marks: [],
-      first_in: daysAgo(1),
-      last_out: daysAgo(1),
-      lunch_out: null,
-      lunch_in: null,
-      lunch_minutes: 60,
-      worked_minutes: 450,
-    },
-    {
-      date: today.replace(/\d+$/, (d) => String(Math.max(1, Number(d) - 2)).padStart(2, '0')),
-      marks: [],
-      first_in: daysAgo(2),
-      last_out: daysAgo(2),
-      lunch_out: null,
-      lunch_in: null,
-      lunch_minutes: 50,
-      worked_minutes: 430,
-    },
-  ],
-  raw: [],
-};
 
 export const demoWeather = {
   ok: true,
@@ -372,16 +522,210 @@ export const demoSites = [
 
 export const demoInventory = {
   products: [
-    { id: 'p-1', name: 'iPhone 15 Pro', sku: 'IP15-PRO', stock: 24, branch: 'Santa Cruz', rotationDays: 18 },
-    { id: 'p-2', name: 'MacBook Air M3', sku: 'MBA-M3', stock: 12, branch: 'La Paz', rotationDays: 25 },
-    { id: 'p-3', name: 'Apple Watch S9', sku: 'AW-S9', stock: 30, branch: 'Cochabamba', rotationDays: 12 },
-    { id: 'p-4', name: 'AirPods Pro', sku: 'APP-2', stock: 55, branch: 'Santa Cruz', rotationDays: 8 },
+    {
+      id: 'p-iph15pro-256',
+      name: 'iPhone 15 Pro · 256GB',
+      sku: 'IP15-PRO-256',
+      branch: 'Santa Cruz',
+      stock: 26,
+      rotationDays: 15,
+      category: 'Smartphones',
+      type: 'individual',
+      cost: 8200,
+      price: 10490,
+      reorderPoint: 10,
+    },
+    {
+      id: 'p-iph15-128',
+      name: 'iPhone 15 · 128GB',
+      sku: 'IP15-128',
+      branch: 'La Paz',
+      stock: 34,
+      rotationDays: 18,
+      category: 'Smartphones',
+      type: 'individual',
+      cost: 6300,
+      price: 8490,
+      reorderPoint: 12,
+    },
+    {
+      id: 'p-iph14plus',
+      name: 'iPhone 14 Plus · 128GB',
+      sku: 'IP14-PLUS',
+      branch: 'Cochabamba',
+      stock: 19,
+      rotationDays: 21,
+      category: 'Smartphones',
+      type: 'individual',
+      cost: 5600,
+      price: 7590,
+      reorderPoint: 8,
+    },
+    {
+      id: 'p-macair-m3',
+      name: 'MacBook Air 13" · M3 · 16GB/512GB',
+      sku: 'MBA13-M3-16-512',
+      branch: 'La Paz',
+      stock: 14,
+      rotationDays: 24,
+      category: 'Mac',
+      type: 'individual',
+      cost: 10200,
+      price: 13500,
+      reorderPoint: 6,
+    },
+    {
+      id: 'p-macpro-14',
+      name: 'MacBook Pro 14" · M3 Pro',
+      sku: 'MBP14-M3P',
+      branch: 'Santa Cruz',
+      stock: 9,
+      rotationDays: 27,
+      category: 'Mac',
+      type: 'individual',
+      cost: 14500,
+      price: 18600,
+      reorderPoint: 4,
+    },
+    {
+      id: 'p-ipad-air',
+      name: 'iPad Air M2 · 256GB',
+      sku: 'IPAD-AIR-M2',
+      branch: 'Santa Cruz',
+      stock: 22,
+      rotationDays: 19,
+      category: 'iPad',
+      type: 'individual',
+      cost: 4200,
+      price: 5690,
+      reorderPoint: 10,
+    },
+    {
+      id: 'p-ipad-mini',
+      name: 'iPad mini 6 · 64GB',
+      sku: 'IPAD-MINI-6',
+      branch: 'Cochabamba',
+      stock: 17,
+      rotationDays: 23,
+      category: 'iPad',
+      type: 'individual',
+      cost: 3600,
+      price: 4890,
+      reorderPoint: 8,
+    },
+    {
+      id: 'p-watch-s9',
+      name: 'Apple Watch Series 9 GPS',
+      sku: 'AW-S9-GPS',
+      branch: 'Cochabamba',
+      stock: 28,
+      rotationDays: 14,
+      category: 'Wearables',
+      type: 'individual',
+      cost: 2800,
+      price: 3690,
+      reorderPoint: 12,
+    },
+    {
+      id: 'p-watch-ultra2',
+      name: 'Apple Watch Ultra 2',
+      sku: 'AW-ULTRA2',
+      branch: 'Santa Cruz',
+      stock: 6,
+      rotationDays: 30,
+      category: 'Wearables',
+      type: 'individual',
+      cost: 5200,
+      price: 6990,
+      reorderPoint: 3,
+    },
+    {
+      id: 'p-airpods-pro2',
+      name: 'AirPods Pro (2da generación)',
+      sku: 'APP-PRO2',
+      branch: 'Santa Cruz',
+      stock: 48,
+      rotationDays: 9,
+      category: 'Audio',
+      type: 'individual',
+      cost: 1350,
+      price: 1990,
+      reorderPoint: 20,
+    },
+    {
+      id: 'p-pencil-pro',
+      name: 'Apple Pencil Pro',
+      sku: 'PENCIL-PRO',
+      branch: 'La Paz',
+      stock: 25,
+      rotationDays: 16,
+      category: 'Accesorios',
+      type: 'individual',
+      cost: 900,
+      price: 1350,
+      reorderPoint: 10,
+    },
+    {
+      id: 'combo-iphone-care',
+      name: 'Combo iPhone 15 Pro + AppleCare+',
+      sku: 'CB-IP15-CARE',
+      branch: 'Santa Cruz',
+      stock: 11,
+      rotationDays: 12,
+      category: 'Combos / Kits',
+      type: 'combo',
+      cost: 9300,
+      price: 11990,
+      reorderPoint: 4,
+      components: [
+        { id: 'p-iph15pro-256', name: 'iPhone 15 Pro · 256GB', qty: 1 },
+        { id: 'svc-applecare', name: 'AppleCare+ 2 años', qty: 1 },
+      ],
+    },
+    {
+      id: 'combo-macair-creative',
+      name: 'Kit MacBook Air + AirPods Pro',
+      sku: 'CB-MBA-AUDIO',
+      branch: 'La Paz',
+      stock: 7,
+      rotationDays: 14,
+      category: 'Combos / Kits',
+      type: 'combo',
+      cost: 11500,
+      price: 14990,
+      reorderPoint: 3,
+      components: [
+        { id: 'p-macair-m3', name: 'MacBook Air 13" · M3', qty: 1 },
+        { id: 'p-airpods-pro2', name: 'AirPods Pro (2da generación)', qty: 1 },
+      ],
+    },
+    {
+      id: 'combo-ipad-productividad',
+      name: 'Combo Productividad iPad Air + Pencil + Smart Keyboard',
+      sku: 'CB-IPAD-PROD',
+      branch: 'Santa Cruz',
+      stock: 10,
+      rotationDays: 11,
+      category: 'Combos / Kits',
+      type: 'combo',
+      cost: 5150,
+      price: 6890,
+      reorderPoint: 4,
+      components: [
+        { id: 'p-ipad-air', name: 'iPad Air M2', qty: 1 },
+        { id: 'p-pencil-pro', name: 'Apple Pencil Pro', qty: 1 },
+        { id: 'acc-smart-keyboard', name: 'Smart Keyboard Folio', qty: 1 },
+      ],
+    },
   ],
   movements: [
-    { id: 'm-1', product: 'iPhone 15 Pro', type: 'Salida', qty: 2, ref: 'Venta #2001', date: today, branch: 'Santa Cruz' },
-    { id: 'm-2', product: 'MacBook Air M3', type: 'Entrada', qty: 5, ref: 'Compra proveedor', date: today, branch: 'La Paz' },
-    { id: 'm-3', product: 'Apple Watch S9', type: 'Salida', qty: 1, ref: 'Venta #2003', date: today, branch: 'Cochabamba' },
-    { id: 'm-4', product: 'AirPods Pro', type: 'Transferencia', qty: 10, ref: 'A La Paz', date: today, branch: 'Santa Cruz' },
+    { id: 'm-001', product: 'iPhone 15 Pro · 256GB', type: 'Salida', qty: 3, ref: 'Venta #3205', date: today, branch: 'Santa Cruz' },
+    { id: 'm-002', product: 'iPhone 15 · 128GB', type: 'Entrada', qty: 10, ref: 'Compra importador', date: today, branch: 'La Paz' },
+    { id: 'm-003', product: 'MacBook Air 13" · M3 · 16GB/512GB', type: 'Salida', qty: 2, ref: 'Pedido corporativo', date: today, branch: 'La Paz' },
+    { id: 'm-004', product: 'Combo iPhone 15 Pro + AppleCare+', type: 'Salida', qty: 1, ref: 'Venta ecommerce', date: today, branch: 'Santa Cruz' },
+    { id: 'm-005', product: 'Apple Watch Series 9 GPS', type: 'Transferencia', qty: 5, ref: 'A sucursal La Paz', date: today, branch: 'Cochabamba' },
+    { id: 'm-006', product: 'AirPods Pro (2da generación)', type: 'Salida', qty: 8, ref: 'Venta retail', date: today, branch: 'Santa Cruz' },
+    { id: 'm-007', product: 'Kit MacBook Air + AirPods Pro', type: 'Salida', qty: 1, ref: 'Venta #3210', date: today, branch: 'La Paz' },
   ],
 };
 
@@ -405,7 +749,7 @@ export const demoProductividad = {
 };
 
 export const demoCajas = [
-  { id: 'cx-1', fecha: today, local: 'Santa Cruz', estado: 'Cuadrado', declarado: 15200, sistema: 15200, diferencias: 0 },
-  { id: 'cx-2', fecha: today, local: 'La Paz', estado: 'Diferencia', declarado: 9800, sistema: 10000, diferencias: -200 },
-  { id: 'cx-3', fecha: today, local: 'Cochabamba', estado: 'Cuadrado', declarado: 7600, sistema: 7600, diferencias: 0 },
+  { id: 'cx-1', fecha: today, local: 'Santa Cruz', estado: 'Cuadrado', declarado: 15200, sistema: 15200, diferencias: 0, cajero: 'Cajero demo' },
+  { id: 'cx-2', fecha: today, local: 'La Paz', estado: 'Diferencia', declarado: 9800, sistema: 10000, diferencias: -200, cajero: 'Cajero La Paz' },
+  { id: 'cx-3', fecha: today, local: 'Cochabamba', estado: 'Cuadrado', declarado: 7600, sistema: 7600, diferencias: 0, cajero: 'Cajero Cochabamba' },
 ];

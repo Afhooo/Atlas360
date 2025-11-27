@@ -12,6 +12,7 @@ import {
   UserPlus, Users2, DollarSign, Package, Calendar, Settings,
   AlertTriangle, CheckCircle, Clock, Sparkles, TrendingUp
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { normalizeRole, type Role } from '@/lib/auth/roles';
 
 import WeatherStrip from '@/components/widgets/WeatherStrip';
@@ -19,6 +20,7 @@ import TrafficPanel from '@/components/widgets/TrafficPanel';
 import { ModuleKey, moduleFlags } from '@/lib/config/featureFlags';
 import { canAccessModule } from '@/lib/auth/permissions';
 import { useDemoOps } from '@/lib/demo/state';
+import { useBusinessMock } from '@/lib/demo/useBusinessMock';
 
 const fetcher = async (u: string) => {
   const res = await fetch(u, { cache: 'no-store' });
@@ -61,9 +63,12 @@ const MODULES: { title: string; desc: string; href: string; icon: React.ReactNod
   { title: 'Configuración', desc: 'Usuarios y roles', href: '/configuracion', icon: <Settings size={16} />, module: 'configuracion' },
 ];
 
+const CRM_SALES_PATH = '/ventas/registro-crm';
+
 export default function DashboardHome() {
   // === DATA SOURCES ===
   const { data: me } = useSWR('/endpoints/me', fetcher);
+  const business = useBusinessMock();
 
   const role: Role = useMemo(() => normalizeRole(me?.role), [me?.role]);
   const name = (me?.full_name || '—').split(' ')[0];
@@ -78,6 +83,7 @@ export default function DashboardHome() {
   const { data: mySales } = useSWR(() => (me?.ok ? `/endpoints/my/sales?month=${monthKey}` : null), fetcher);
   const { data: myAttendance } = useSWR(() => (me?.ok && role !== 'promotor' ? `/endpoints/my/attendance?month=${monthKey}` : null), fetcher);
   const { data: salesReport } = useSWR('/endpoints/sales-report', fetcher);
+  const { data: overview } = useSWR('/endpoints/metrics/overview', fetcher);
 
   // Clima y Tráfico
   const { data: wx } = useSWR(
@@ -89,38 +95,12 @@ export default function DashboardHome() {
     fetcher
   );
 
-  const todaysSales = useMemo(() => {
-    if (!Array.isArray(salesSummary)) return [] as any[];
-    return salesSummary.filter((row: any) => {
-      const date = row?.summary_date ?? row?.summaryDate;
-      if (!date) return false;
-      return String(date).slice(0, 10) === todayKey;
-    });
-  }, [salesSummary, todayKey]);
-
-  const monthSummary = useMemo(() => {
-    if (!Array.isArray(salesSummary)) return { revenue: 0, products: 0 };
-    const rows = salesSummary.filter((row: any) => String(row?.summary_date ?? '').startsWith(monthKey));
-    return {
-      revenue: rows.reduce((sum, row) => sum + Number(row?.total_revenue ?? row?.total ?? 0), 0),
-      products: rows.reduce((sum, row) => sum + Number(row?.total_products_sold ?? 0), 0),
-    };
-  }, [salesSummary, monthKey]);
-
-  const kpis = useMemo(() => {
-    const ingresos = todaysSales.reduce((sum, row) => sum + Number(row?.total_revenue ?? row?.total ?? 0), 0);
-    const productos = todaysSales.reduce((sum, row) => sum + Number(row?.total_products_sold ?? 0), 0);
-    const registros = todaysSales.length;
-    const devolucionesCount = Number(returnsStats?.count ?? 0);
-    const devolucionesMonto = Number(returnsStats?.amount ?? 0);
-    return {
-      ingresos,
-      productos,
-      registros,
-      devolucionesCount,
-      devolucionesMonto,
-    };
-  }, [todaysSales, returnsStats]);
+  const overviewToday = overview?.today || { revenue: 0, tickets: 0, units: 0 };
+  const overviewWeek = overview?.week || { revenue: 0, tickets: 0, units: 0 };
+  const overviewMonth = overview?.month || { revenue: 0, tickets: 0, units: 0 };
+  const returnsToday = overview?.returnsToday || { count: 0, amount: 0 };
+  const attendanceToday = overview?.attendanceToday || { marks: 0, people: 0 };
+  const cash = overview?.cash || { today: 0, month: 0 };
 
   // === DATOS DEL CLIMA ===
   const toRiskEs = (r: unknown): Wx['risk'] => {
@@ -208,7 +188,7 @@ export default function DashboardHome() {
     return events.slice(0, 8);
   }, [myAttendance, mySales]);
 
-  const weeklySales = useMemo(() => {
+  const weeklySalesReport = useMemo(() => {
     const rows = Array.isArray(salesReport) ? salesReport : [];
     const start = startOfWeek(new Date(), { weekStartsOn: 1 });
     const end = endOfWeek(new Date(), { weekStartsOn: 1 });
@@ -227,8 +207,34 @@ export default function DashboardHome() {
     return { revenue, tickets, units };
   }, [salesReport]);
 
+  const lastSalesDate = business.dailySales.at(-1)?.date ?? todayKey;
+  const lastDateObj = new Date(lastSalesDate);
+  const thirtyDaysAgo = new Date(lastDateObj);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const prevWindowStart = new Date(thirtyDaysAgo);
+  prevWindowStart.setDate(prevWindowStart.getDate() - 30);
+  const windowRange = business.totalByRange(thirtyDaysAgo.toISOString().slice(0, 10), lastSalesDate);
+  const prevRange = business.totalByRange(
+    prevWindowStart.toISOString().slice(0, 10),
+    new Date(thirtyDaysAgo).toISOString().slice(0, 10)
+  );
+
+  const hourlyTrend = windowRange.revenue && prevRange.revenue
+    ? ((windowRange.revenue - prevRange.revenue) / Math.max(prevRange.revenue, 1)) * 100
+    : 0;
+
+  const weeklyTimeline = business.weeklySales.map((point) => ({
+    week: point.week,
+    revenue: point.revenue,
+    target: business.monthlyTargets[point.week.slice(0, 7)]?.revenue ?? 0,
+  }));
+
+  const returnsSeries = Object.entries(business.returnsByWeek)
+    .map(([week, amount]) => ({ week, amount }))
+    .slice(-8);
+
   return (
-    <div className="min-h-screen space-y-8">
+    <div className="min-h-screen space-y-5 sm:space-y-6">
       {/* === HEADER HERO === */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
@@ -251,13 +257,13 @@ export default function DashboardHome() {
                 <Activity size={28} className="text-apple-blue-400" />
               </motion.div>
               <div>
-                <motion.h1 
+              <motion.h1 
                   className="apple-h1 mb-2"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.2 }}
                 >
-                  Hola, {name} 👋 Bienvenido a Atlas 360
+                  Hola, {name} 👋 Bienvenido a Atlas Suite
                 </motion.h1>
                 <motion.p 
                   className="apple-body text-apple-gray-300"
@@ -274,19 +280,19 @@ export default function DashboardHome() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 }}
-              className="flex gap-3"
+              className="flex flex-wrap gap-2"
             >
-              <Link href="/dashboard/asesores/registro" className="btn-primary">
-                <UserPlus size={18} />
+              <Link href={CRM_SALES_PATH} className="btn-primary btn-sm">
+                <UserPlus size={16} />
                 Registrar venta
-                <ArrowRight size={16} />
+                <ArrowRight size={14} />
               </Link>
-              <Link href="/dashboard/financial-control" className="btn-secondary">
-                <DollarSign size={18} />
+              <Link href="/cajas" className="btn-secondary btn-sm">
+                <DollarSign size={16} />
                 Caja diaria
               </Link>
-              <Link href="/dashboard/inventario" className="btn-secondary">
-                <Package size={18} />
+              <Link href="/dashboard/inventario" className="btn-secondary btn-sm">
+                <Package size={16} />
                 Ver inventario
               </Link>
             </motion.div>
@@ -300,35 +306,117 @@ export default function DashboardHome() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.2 }}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard 
             title="Ingresos de hoy" 
-            value={money(kpis.ingresos)} 
-            hint={`${num(kpis.productos)} productos`}
+            value={money(overviewToday.revenue)} 
+            hint={`${num(overviewToday.units)} uds / ${num(overviewToday.tickets)} tickets`}
             icon={<DollarSign size={20} />}
             color="blue"
           />
           <KpiCard 
-            title="Productos vendidos" 
-            value={num(kpis.productos)} 
-            hint={`Sucursales activas: ${num(kpis.registros)}`}
-            icon={<Package size={20} />}
-            color="green"
-          />
-          <KpiCard 
             title="Devoluciones (hoy)" 
-            value={num(kpis.devolucionesCount)} 
-            hint={money(kpis.devolucionesMonto)}
+            value={num(returnsToday.count)} 
+            hint={money(returnsToday.amount)}
             icon={<RotateCcw size={20} />}
             color="orange"
           />
           <KpiCard 
-            title="Ventas del mes" 
-            value={money(monthSummary.revenue)} 
-            hint={`${num(monthSummary.products)} productos`}
+            title="Caja (proxy)" 
+            value={money(cash.today)} 
+            hint={`Mes: ${money(cash.month)}`}
             icon={<CheckCircle size={20} />}
             color="green"
           />
+          <KpiCard 
+            title="Asistencia hoy" 
+            value={num(attendanceToday.people)} 
+            hint={`${num(attendanceToday.marks)} marcajes`}
+            icon={<Calendar size={20} />}
+            color="purple"
+          />
+        </div>
+      </motion.section>
+
+      {/* === COMPARATIVO SEMANAL === */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.34 }}
+      >
+        <div className="glass-card p-4 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="apple-h3">Comparativo semanal</h2>
+              <p className="apple-caption text-apple-gray-400">
+                Ventas frente a metas y diferencias de las últimas 8 semanas.
+              </p>
+            </div>
+            <span className="apple-caption text-apple-gray-500">
+              +{windowRange.revenue.toLocaleString('es-BO')} Bs · {hourlyTrend.toFixed(1)}%
+            </span>
+          </div>
+          <div className="w-full h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyTimeline} margin={{ left: 0, right: 0, top: 10, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                <XAxis dataKey="week" stroke="rgba(255,255,255,0.6)" fontSize={12} />
+                <YAxis stroke="rgba(255,255,255,0.6)" fontSize={12} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                <Tooltip contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(255,255,255,0.1)' }} formatter={(value:any) => [`Bs ${value.toLocaleString('es-BO')}`, 'Ventas']} />
+                <Bar dataKey="target" fill="rgba(255,255,255,0.2)" radius={[6,6,0,0]} />
+                <Bar dataKey="revenue" fill="#3b82f6" radius={[6,6,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </motion.section>
+
+      {/* === RETORNOS + STOCK CRÍTICO === */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.36 }}
+        className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+      >
+        <div className="glass-card p-4 sm:p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-apple bg-apple-orange-500/20 border border-apple-orange-500/30">
+              <RotateCcw size={18} className="text-apple-orange-400" />
+            </div>
+            <h3 className="apple-h3">Devoluciones semanales</h3>
+          </div>
+          <div className="w-full h-[220px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={returnsSeries} margin={{ top: 8, right: 5, left: 5, bottom: 5 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="week" stroke="rgba(255,255,255,0.6)" fontSize={12} />
+                <YAxis stroke="rgba(255,255,255,0.6)" fontSize={12} />
+                <Tooltip contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(255,255,255,0.1)' }} formatter={(value:any) => [`Bs ${value.toLocaleString('es-BO')}`, 'Devoluciones']} />
+                <Bar dataKey="amount" fill="#ef4444" radius={[6,6,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="glass-card p-4 sm:p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-apple bg-apple-green-500/20 border border-apple-green-500/30">
+              <Sparkles size={16} className="text-apple-green-400" />
+            </div>
+            <h3 className="apple-h3">Stock crítico</h3>
+          </div>
+          <div className="space-y-2 text-xs">
+            {business.dailyInventory.slice(-3).map((item) => (
+              <div key={`${item.date}-${item.branch}`} className="flex items-center justify-between">
+                <span>{item.date} · {item.branch}</span>
+                <span className={`font-semibold ${item.critical ? 'text-apple-orange-300' : 'text-apple-green-300'}`}>
+                  {item.stock} uds {item.critical ? '· Crítico' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="apple-caption text-apple-gray-400">
+            Rotación estimada por canal y rango semanal. Activa alertas si baja de 30 uds.
+          </p>
         </div>
       </motion.section>
 
@@ -338,25 +426,25 @@ export default function DashboardHome() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.32 }}
       >
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-3">
           <KpiCard
             title="Ventas semana"
-            value={money(weeklySales.revenue)}
-            hint={`${num(weeklySales.tickets)} tickets / ${num(weeklySales.units)} uds`}
+            value={money(overviewWeek.revenue || weeklySalesReport.revenue)}
+            hint={`${num(overviewWeek.tickets || weeklySalesReport.tickets)} tickets / ${num(overviewWeek.units || weeklySalesReport.units)} uds`}
             icon={<TrendingUp size={20} />}
             color="blue"
           />
           <KpiCard
-            title="Caja operativa"
-            value={money(demoOps.cash)}
-            hint="Muestra cash demo acumulado"
+            title="Ventas del mes"
+            value={money(overviewMonth.revenue)}
+            hint={`${num(overviewMonth.units)} uds`}
             icon={<DollarSign size={20} />}
             color="green"
           />
           <KpiCard
             title="Asistencia"
-            value={num(myAttendance?.days?.length ?? 0)}
-            hint="Días con marcaje en el mes"
+            value={num(attendanceToday.people)}
+            hint={`${num(attendanceToday.marks)} marcajes`}
             icon={<Calendar size={20} />}
             color="purple"
           />
@@ -370,57 +458,63 @@ export default function DashboardHome() {
         transition={{ duration: 0.6, delay: 0.3 }}
       >
         <div className="glass-card">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-apple-blue-500/20 rounded-apple border border-apple-blue-500/30">
-                <Sparkles size={18} className="text-apple-blue-400" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-apple-blue-500/15 rounded-apple border border-apple-blue-500/20 text-apple-blue-500">
+                <Sparkles size={16} />
               </div>
               <h2 className="apple-h2">Acciones rápidas</h2>
             </div>
             <Link
               href="/dashboard/asesores/playbook-whatsapp"
-              className="text-apple-gray-400 hover:text-white transition-colors text-apple-body"
+              className="text-apple-caption text-apple-gray-500 hover:text-apple-blue-500 transition-colors"
             >
               Ver Central Operativa →
             </Link>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="flex flex-wrap gap-2">
             <QuickAction 
               href="/dashboard/promotores/registro" 
-              icon={<Users2 size={20} />} 
+              icon={<Users2 size={16} />} 
               label="Registrar Promotor" 
               description="Nuevo promotor"
             />
             <QuickAction 
-              href="/dashboard/asesores/registro" 
-              icon={<UserPlus size={20} />} 
-              label="Registrar Asesor" 
-              description="Nuevo asesor"
+              href={CRM_SALES_PATH} 
+              icon={<UserPlus size={16} />} 
+              label="Registrar venta (asesor)" 
+              description="Captura en CRM"
             />
             <QuickAction 
               href="/dashboard/asesores/devoluciones" 
-              icon={<RotateCcw size={20} />} 
+              icon={<RotateCcw size={16} />} 
               label="Nueva Devolución" 
               description="Procesar devolución"
             />
             <QuickAction 
               href="/dashboard/vendedores" 
-              icon={<ClipboardList size={20} />} 
+              icon={<ClipboardList size={16} />} 
               label="Reporte Vendedores" 
               description="Ver estadísticas"
             />
             <QuickAction 
               href="/dashboard/promotores/admin" 
-              icon={<ClipboardList size={20} />} 
+              icon={<ClipboardList size={16} />} 
               label="Reporte Promotores" 
               description="Análisis de rendimiento"
             />
             <QuickAction 
               href="/dashboard/admin/resumen" 
-              icon={<ClipboardList size={20} />} 
+              icon={<ClipboardList size={16} />} 
               label="Reporte Asistencia" 
               description="Control de asistencia"
+            />
+            <QuickAction 
+              href="/cajas" 
+              icon={<DollarSign size={16} />} 
+              label="Caja diaria" 
+              description="Turnos y cuadratura"
             />
           </div>
         </div>
@@ -435,7 +529,7 @@ export default function DashboardHome() {
         <div className="glass-card p-4 sm:p-6 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h2 className="apple-h2">Módulos Atlas 360</h2>
+              <h2 className="apple-h2">Módulos Atlas Suite</h2>
               <p className="apple-caption text-apple-gray-400">Accede rápido a las áreas clave</p>
             </div>
           </div>
@@ -626,38 +720,47 @@ function KpiCard({
   hint?: string; 
   icon?: React.ReactNode;
   trend?: string;
-  color?: 'blue' | 'green' | 'orange' | 'red';
+  color?: 'blue' | 'green' | 'orange' | 'red' | 'purple';
 }) {
   const colorClasses = {
-    blue: 'from-apple-blue-500/20 to-apple-blue-600/10 border-apple-blue-500/30 text-apple-blue-400',
-    green: 'from-apple-green-500/20 to-apple-green-600/10 border-apple-green-500/30 text-apple-green-400',
-    orange: 'from-apple-orange-500/20 to-apple-orange-600/10 border-apple-orange-500/30 text-apple-orange-400',
-    red: 'from-apple-red-500/20 to-apple-red-600/10 border-apple-red-500/30 text-apple-red-400',
-  };
+    blue: 'from-apple-blue-500/24 via-apple-blue-600/14 to-apple-blue-900/40 border-apple-blue-500/40 text-apple-blue-300',
+    green: 'from-apple-green-500/24 via-apple-green-600/14 to-apple-green-900/40 border-apple-green-500/40 text-apple-green-300',
+    orange: 'from-apple-orange-500/24 via-apple-orange-600/14 to-apple-orange-900/40 border-apple-orange-500/40 text-apple-orange-300',
+    red: 'from-apple-red-500/24 via-apple-red-600/14 to-apple-red-900/40 border-apple-red-500/40 text-apple-red-300',
+    purple: 'from-apple-blue-500/30 via-violet-600/20 to-apple-purple-900/40 border-apple-purple-500/40 text-apple-purple-300',
+  } as const;
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02, y: -4 }}
-      whileTap={{ scale: 0.98 }}
-      initial={{ opacity: 0, y: 20 }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.99 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-      className="glass-card hover:shadow-apple-lg transition-all duration-300"
+      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+      className="glass-card transition-all duration-300 relative overflow-hidden"
     >
-      <div className="flex items-start justify-between mb-4">
-        <div className="apple-caption text-apple-gray-400">{title}</div>
+      <div className="pointer-events-none absolute inset-px rounded-[10px] bg-gradient-to-br from-white/4 via-transparent to-white/0" />
+      <div className="flex items-start justify-between mb-4 relative z-10">
+        <div>
+          <div className="apple-caption text-apple-gray-400 mb-1">{title}</div>
+          {hint && (
+            <div className="apple-caption text-apple-gray-500 sm:hidden">{hint}</div>
+          )}
+        </div>
         {icon && (
-          <div className={`p-2 bg-gradient-to-br ${colorClasses[color]} rounded-apple border`}>
+          <div className={`w-9 h-9 rounded-[999px] bg-gradient-to-br ${colorClasses[color]} border flex items-center justify-center shadow-apple-sm`}>
             {icon}
           </div>
         )}
       </div>
       
-      <div className="apple-h2 text-white mb-2">{value}</div>
+      <div className="apple-h2 text-white mb-1 relative z-10 text-[14px] leading-[18px]">
+        {value}
+      </div>
       
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between relative z-10">
         {hint && (
-          <div className="apple-caption text-apple-gray-500">{hint}</div>
+          <div className="apple-caption text-apple-gray-500 hidden sm:block">{hint}</div>
         )}
         {trend && (
           <div className={`apple-caption font-medium ${trend.startsWith('+') ? 'text-apple-green-400' : trend.startsWith('-') ? 'text-apple-red-400' : 'text-apple-gray-400'}`}>
@@ -682,26 +785,22 @@ function QuickAction({
 }) {
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.99 }}
     >
       <Link
         href={href}
-        className="group flex flex-col items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-apple hover:bg-white/10 hover:border-white/20 transition-all duration-300 text-center"
+        className="group flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-apple hover:bg-white/10 hover:border-white/20 transition-all duration-200 text-left"
       >
-        <div className="p-3 bg-apple-blue-500/20 border border-apple-blue-500/30 rounded-apple group-hover:bg-apple-blue-500/30 transition-colors">
+        <div className="p-2 bg-apple-blue-500/15 border border-apple-blue-500/25 rounded-apple group-hover:bg-apple-blue-500/25 transition-colors">
           {icon}
         </div>
-        <div>
-          <div className="apple-body font-medium text-white mb-1">{label}</div>
+        <div className="flex flex-col min-w-0">
+          <div className="apple-body font-medium text-white truncate">{label}</div>
           {description && (
-            <div className="apple-caption text-apple-gray-400">{description}</div>
+            <div className="apple-caption text-apple-gray-400 truncate">{description}</div>
           )}
         </div>
-        <ArrowRight 
-          size={16} 
-          className="text-apple-gray-500 group-hover:text-white transition-colors opacity-0 group-hover:opacity-100" 
-        />
       </Link>
     </motion.div>
   );

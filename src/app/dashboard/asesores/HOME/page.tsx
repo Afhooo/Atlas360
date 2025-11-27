@@ -16,7 +16,7 @@ export default function AsesoresHomePage() {
         <Card
           title="Registro de Ventas"
           desc="Captura rápida de ventas diarias."
-          href="/dashboard/asesores/registro"
+          href="/ventas/registro-crm"
         />
         <Card
           title="Asistencia"

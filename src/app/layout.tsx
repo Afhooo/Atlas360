@@ -29,12 +29,12 @@ const THEME_INIT_SCRIPT = `(function() {
 })();`;
 
 export const metadata: Metadata = {
-  title: 'Atlas 360 | Sistema de Gestión',
-  description: 'Dashboard central del sistema de gestión integral de Atlas 360 con diseño inspirado en Apple.',
-  keywords: ['Atlas 360', 'Dashboard', 'Gestión', 'Sistema'],
-  authors: [{ name: 'Atlas 360 Team' }],
-  creator: 'Atlas 360',
-  publisher: 'Atlas 360',
+  title: 'Atlas Suite | Sistema de Gestión',
+  description: 'Dashboard central del sistema de gestión integral de Atlas Suite con diseño inspirado en Apple.',
+  keywords: ['Atlas Suite', 'Dashboard', 'Gestión', 'Sistema'],
+  authors: [{ name: 'Atlas Suite Team' }],
+  creator: 'Atlas Suite',
+  publisher: 'Atlas Suite',
   robots: 'noindex, nofollow',
 };
 
@@ -65,7 +65,7 @@ export default function RootLayout({
         {/* Meta tags adicionales para PWA */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Atlas 360" />
+        <meta name="apple-mobile-web-app-title" content="Atlas Suite" />
         
         {/* Favicon y iconos */}
         <link rel="icon" href="/favicon.ico" sizes="any" />

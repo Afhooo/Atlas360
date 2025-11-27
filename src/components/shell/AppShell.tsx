@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { Menu } from 'lucide-react';
 
 import { Sidebar } from '@/components/nav/Sidebar';
+import { ChatFloatingButton } from '@/components/chat/ChatFloatingButton';
 import { normalizeRole, type Role } from '@/lib/auth/roles';
 import { canAccessModule } from '@/lib/auth/permissions';
 import { moduleFlags, type ModuleKey } from '@/lib/config/featureFlags';
@@ -31,7 +32,7 @@ const PATH_TITLES: { pattern: RegExp; title: string; module: ModuleKey }[] = [
 function resolveTitle(pathname: string): { title: string; module: ModuleKey | null } {
   const found = PATH_TITLES.find((p) => p.pattern.test(pathname));
   if (found) return { title: found.title, module: found.module };
-  return { title: 'Atlas 360', module: null };
+  return { title: 'Atlas Suite', module: null };
 }
 
 export function AppShell({ children, title }: AppShellProps) {
@@ -45,7 +46,7 @@ export function AppShell({ children, title }: AppShellProps) {
 
   const role: Role = useMemo(() => normalizeRole(me?.role), [me?.role]);
   const name = me?.full_name || 'Usuario';
-  const business = 'Atlas 360';
+  const business = 'Atlas Suite';
 
   const { title: autoTitle, module } = resolveTitle(pathname || '/');
   const currentTitle = title || autoTitle;
@@ -65,7 +66,7 @@ export function AppShell({ children, title }: AppShellProps) {
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   // Bloquea acceso si el módulo está desactivado
-  const moduleActive = module ? moduleFlags[module] !== false : true;
+  const moduleActive = module ? moduleFlags[module] === true : true;
   const moduleAllowed = module ? canAccessModule(role, module) : true;
 
   if (error) {
@@ -103,10 +104,10 @@ export function AppShell({ children, title }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen flex bg-black">
+    <div className="min-h-screen flex bg-black text-[13px]">
       <Sidebar userRole={role} userName={name} isOpen={sidebarOpen} onClose={closeSidebar} />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
         <header className="sticky top-0 z-30">
           <div className="glass backdrop-blur-apple-lg border-b border-white/10">
             <div className="flex items-center justify-between px-4 py-3">
@@ -132,10 +133,11 @@ export function AppShell({ children, title }: AppShellProps) {
           </div>
         </header>
 
-        <main className="flex-1 relative p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 relative p-3 sm:p-4 lg:p-6">
           <div className="absolute inset-0 bg-gradient-to-br from-transparent via-apple-blue-950/5 to-transparent pointer-events-none" />
           <div className="relative z-10 space-y-6">{children}</div>
         </main>
+        <ChatFloatingButton role={role} />
       </div>
     </div>
   );

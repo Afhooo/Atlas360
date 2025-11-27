@@ -318,7 +318,7 @@ export function LoginClient() {
               transition={{ delay: 0.3, duration: 0.5 }}
               className="apple-h1 mb-4 bg-gradient-to-r from-white via-white to-white/70 bg-clip-text text-transparent"
             >
-              Atlas 360
+              Atlas Suite
             </motion.h1>
             
             <motion.p
@@ -336,7 +336,7 @@ export function LoginClient() {
               transition={{ delay: 0.5, duration: 0.5 }}
               className="mt-2 text-sm text-white/60"
             >
-              Acceso corporativo seguro para el equipo Atlas 360
+              Acceso corporativo seguro para el equipo Atlas Suite
             </motion.p>
           </div>
 
@@ -530,7 +530,7 @@ export function LoginClient() {
             <div className="flex flex-col items-center gap-3 text-apple-gray-400">
               <div className="h-px w-24 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
               <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 text-[13px]">
-                <span className="text-white/70">© 2025 Atlas 360. Todos los derechos reservados.</span>
+                <span className="text-white/70">© 2025 Atlas Suite. Todos los derechos reservados.</span>
                 <span className="hidden sm:inline text-white/20">•</span>
                 <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 backdrop-blur-sm shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-white/55">Designed by</span>

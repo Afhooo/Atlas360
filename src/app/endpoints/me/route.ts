@@ -38,14 +38,17 @@ type PersonRow = {
   site_id: string | null; // <-- agregado
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUUID = (value?: string | null) => Boolean(value && UUID_REGEX.test(value));
+
 function normalizeRole(rawRole?: string): string {
   const role = String(rawRole || '').trim().toUpperCase();
-  if (['GERENCIA', 'GERENTE', 'ADMIN', 'ADMINISTRADOR'].includes(role)) return 'ADMIN';
+  if (['GERENTE', 'GERENCIA', 'ADMIN', 'ADMINISTRADOR'].includes(role)) return 'ADMIN';
   if (['PROMOTOR', 'PROMOTORA'].includes(role)) return 'PROMOTOR';
-  if (['COORDINADOR', 'COORDINADORA', 'COORDINACION'].includes(role)) return 'COORDINADOR';
-  if (['LIDER', 'JEFE', 'SUPERVISOR'].includes(role)) return 'LIDER';
-  if (['ASESOR', 'VENDEDOR', 'VENDEDORA'].includes(role)) return 'ASESOR';
-  if (['LOGISTICA', 'RUTAS', 'DELIVERY'].includes(role)) return 'LOGISTICA';
+  if (['COORDINADOR', 'COORDINADORA', 'COORDINACION', 'SUPERVISOR'].includes(role)) return 'COORDINADOR';
+  if (['LIDER', 'JEFE'].includes(role)) return 'LIDER';
+  if (['ASESOR', 'VENDEDOR', 'VENDEDORA', 'COMERCIAL'].includes(role)) return 'ASESOR';
+  if (['CAJERO', 'CAJERA', 'CAJA', 'LOGISTICA', 'RUTAS', 'DELIVERY'].includes(role)) return 'LOGISTICA';
   return 'ASESOR';
 }
 
@@ -75,7 +78,7 @@ export async function GET(request: NextRequest) {
           auth_user_id: payload.sub,
           person_pk: null,
           username: payload.usr ?? null,
-          full_name: payload.name ?? payload.usr ?? 'Usuario Atlas 360',
+          full_name: payload.name ?? payload.usr ?? 'Usuario Atlas Suite',
           email: payload.email ?? null,
           login_email: payload.email ?? null,
           role: normalizedRole,
@@ -142,8 +145,8 @@ export async function GET(request: NextRequest) {
       else if (resp.error) console.warn('[me] username lookup error:', resp.error.message);
     }
 
-    // 4) user_id == auth.users.id
-    if (!person) {
+    // 4) user_id == auth.users.id (solo si el sub es UUID válido)
+    if (!person && isUUID(authUserId)) {
       resp = await withSupabaseRetry(async () =>
         (await admin
           .from('people')
@@ -155,8 +158,8 @@ export async function GET(request: NextRequest) {
       else if (resp.error) console.warn('[me] user_id lookup error:', resp.error.message);
     }
 
-    // 5) id == auth.users.id (legacy)
-    if (!person) {
+    // 5) id == auth.users.id (legacy, solo si sub es UUID válido)
+    if (!person && isUUID(authUserId)) {
       resp = await withSupabaseRetry(async () =>
         (await admin
           .from('people')
@@ -169,13 +172,28 @@ export async function GET(request: NextRequest) {
     }
 
     if (!person) {
+      // Si no encontramos fila en people pero el JWT es válido,
+      // devolvemos un perfil mínimo basado solo en el token para
+      // no bloquear el uso en entornos donde aún no se migró la tabla.
+      const fallbackRole = normalizeRole(payload.role || undefined);
       return NextResponse.json(
         {
-          ok: false,
-        error: 'person_not_found_for_user',
-          details: { email, username, auth_user_id: authUserId },
+          ok: true,
+          auth_user_id: authUserId,
+          person_pk: null,
+          username: payload.usr ?? null,
+          full_name: payload.name ?? payload.usr ?? 'Usuario Atlas Suite',
+          email: payload.email ?? null,
+          login_email: payload.email ?? null,
+          role: fallbackRole,
+          raw_role: payload.role ?? null,
+          privilege_level: typeof payload.lvl === 'number' ? payload.lvl : 1,
+          local: null,
+          site_id: null,
+          site_name: null,
+          _warning: 'person_not_found_for_user',
         },
-        { status: 404 }
+        { headers: { 'Cache-Control': 'no-store' } }
       );
     }
 

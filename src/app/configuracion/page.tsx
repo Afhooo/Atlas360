@@ -9,7 +9,7 @@ export default function ConfiguracionPage() {
       <header className="space-y-2">
         <h1 className="apple-h1 text-white">Configuración</h1>
         <p className="apple-body text-apple-gray-400">
-          Gestiona usuarios, roles, locales y parámetros generales de Atlas 360.
+          Gestiona usuarios, roles, locales y parámetros generales de Atlas Suite.
         </p>
       </header>
 

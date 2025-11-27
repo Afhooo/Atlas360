@@ -47,7 +47,7 @@ export default function MiResumenPage() {
   const permsPath = canReviewPerms ? '/dashboard/permisos' : '/permisos/solicitar';
   const goPermisos = () => router.push(permsPath);
   const goAsistencia = () => router.push('/asistencia');
-  const registerPath = role === 'promotor' ? '/dashboard/promotores/registro' : '/dashboard/asesores/registro';
+  const registerPath = role === 'promotor' ? '/dashboard/promotores/registro' : '/ventas/registro-crm';
   const mySalesPath = role === 'promotor' ? '/dashboard/promotores' : '/mi/resumen';
   const goRegistrarVenta = () => router.push(registerPath);
   const goMisVentas = () => router.push(mySalesPath);

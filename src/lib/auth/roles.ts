@@ -10,12 +10,12 @@
    SALES_REPORT: '/dashboard/sales-report',
    REPORTE_VENDEDORES: '/dashboard/vendedores',
    REPORTE_PROMOTORES: '/dashboard/promotores/admin',
-    VALIDACION_PROMOTORES: '/dashboard/promotores/validacion',
-    VALIDACION_ASESORES: '/dashboard/asesores/validacion',
-    ASISTENCIA_PANEL: '/dashboard/admin/resumen',
-  
-    // Operación
-    REGISTRO_ASESORES: '/dashboard/asesores/registro',
+  VALIDACION_PROMOTORES: '/dashboard/promotores/validacion',
+  VALIDACION_ASESORES: '/dashboard/asesores/validacion',
+  ASISTENCIA_PANEL: '/dashboard/admin/resumen',
+
+  // Operación
+    REGISTRO_ASESORES: '/ventas/registro-crm',
     REGISTRO_PROMOTORES: '/dashboard/promotores/registro',
    DEVOLUCIONES: '/dashboard/asesores/devoluciones',
    ASISTENCIA: '/asistencia',
@@ -32,11 +32,11 @@
      ========================= */
   export type Role =
     | 'admin'
-    | 'coordinador'
-    | 'lider'
-    | 'asesor'
-    | 'promotor'
-    | 'logistica'
+    | 'coordinador'   // jefes de local / supervisión
+    | 'lider'         // líderes de equipo
+    | 'asesor'        // vendedores
+    | 'promotor'      // legacy / campañas
+    | 'logistica'     // logística / cajas
     | 'unknown';
   
   export type Cap =
@@ -92,14 +92,19 @@
      ========================= */
   export function normalizeRole(raw?: string | null): Role {
     const r = String(raw ?? '').trim().toUpperCase();
-  
-    if (['GERENCIA','ADMIN','ADMINISTRADOR'].includes(r)) return 'admin';
+
+    // ADMINISTRADOR / GERENTE → admin
+    if (['GERENTE','GERENCIA','ADMIN','ADMINISTRADOR'].includes(r)) return 'admin';
+    // Supervisión / coordinador
+    if (['COORDINADOR','COORDINADORA','COORDINACION','SUPERVISOR'].includes(r)) return 'coordinador';
+    if (['LIDER','JEFE'].includes(r))      return 'lider';
+    // Vendedor
+    if (['VENDEDOR','VENDEDORA','ASESOR','COMERCIAL'].includes(r))  return 'asesor';
+    // Cajero / logística de operaciones
+    if (['CAJERO','CAJERA','CAJA','LOGISTICA','RUTAS','DELIVERY'].includes(r))   return 'logistica';
+    // Legacy promotor (para no romper datos antiguos)
     if (['PROMOTOR','PROMOTORA'].includes(r))           return 'promotor';
-    if (['COORDINADOR','COORDINADORA','COORDINACION'].includes(r)) return 'coordinador';
-    if (['LIDER','JEFE','SUPERVISOR'].includes(r))      return 'lider';
-    if (['LOGISTICA','RUTAS','DELIVERY'].includes(r))   return 'logistica';
-    if (['ASESOR','VENDEDOR','VENDEDORA'].includes(r))  return 'asesor';
-  
+
     return 'unknown';
   }
   
@@ -147,6 +152,7 @@
         { pattern: /^\/dashboard\/vendedores(?:\/.*)?$/, cap: 'view:resumen-asesores' },
         { pattern: /^\/dashboard\/admin\/resumen(?:\/.*)?$/, cap: 'view:reporte-asistencia' },
         { pattern: /^\/logistica(?:\/.*)?$/, cap: 'view:logistica' },
+        { pattern: /^\/ventas\/registro-crm(?:\/.*)?$/, cap: 'view:registro-asesores' },
         { pattern: /^\/dashboard\/asesores\/registro(?:\/.*)?$/, cap: 'view:registro-asesores' },
         { pattern: /^\/dashboard\/asesores\/devoluciones(?:\/.*)?$/, cap: 'view:devoluciones' },
         { pattern: /^\/dashboard\/inventario(?:\/.*)?$/, cap: 'view:inventario' },

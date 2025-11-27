@@ -1,4 +1,4 @@
-/* Apple-inspired Design System for Atlas 360 */
+/* Apple-inspired Design System for Atlas Suite */
 
 @tailwind base;
 @tailwind components;
@@ -10,22 +10,22 @@
 
   /* Fondo principal */
   --app-bg: #f5f5f7;
-  --app-bg-strong: #ffffff;
+  --app-bg-strong: #fdfdfd;
 
   /* Colores del sistema */
-  --app-foreground: #101828;
-  --app-foreground-soft: rgba(16, 24, 40, 0.82);
-  --app-muted: #667085;
-  --app-border: rgba(15, 23, 42, 0.08);
-  --app-border-strong: rgba(15, 23, 42, 0.16);
-  --app-card: rgba(255, 255, 255, 0.72);
-  --app-card-hover: rgba(255, 255, 255, 0.86);
+  --app-foreground: #0a0f1a;
+  --app-foreground-soft: rgba(10, 15, 26, 0.92);
+  --app-muted: #3f4755;
+  --app-border: rgba(14, 20, 32, 0.08);
+  --app-border-strong: rgba(14, 20, 32, 0.14);
+  --app-card: rgba(255, 255, 255, 0.9);
+  --app-card-hover: rgba(255, 255, 255, 0.98);
 
   /* Efectos de cristal */
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-card-bg: rgba(255, 255, 255, 0.82);
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-card-bg: rgba(255, 255, 255, 0.98);
   --glass-border: rgba(15, 23, 42, 0.08);
-  --glass-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+  --glass-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
 
   /* Gradientes Apple */
   --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
@@ -105,6 +105,8 @@ body {
   background: var(--app-bg);
   color: var(--app-foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -150,6 +152,23 @@ html[data-theme='light'] .hover\:bg-white\/8:hover { background-color: var(--hov
 html[data-theme='light'] .hover\:bg-white\/30:hover { background-color: var(--hover-surface-strong) !important; }
 html[data-theme='light'] .hover\:bg-black:hover { background-color: var(--hover-surface-strong) !important; }
 html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--hover-surface) !important; }
+
+/* Light-mode cards y glass más planos y profesionales */
+html[data-theme='light'] .glass {
+  background: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme='light'] .glass-card {
+  border-radius: 12px !important;
+  border-color: rgba(14, 20, 32, 0.08) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme='light'] .sidebar-shell {
+  background: linear-gradient(180deg, #f5f7fb 0%, #eef2f7 100%) !important;
+  box-shadow: inset -1px 0 0 rgba(14, 20, 32, 0.06);
+}
 
 /* ===== SCROLLBAR PERSONALIZADO ===== */
 ::-webkit-scrollbar {
@@ -197,7 +216,7 @@ html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--ho
   }
   
   .glass-card {
-    @apply glass rounded-apple p-apple shadow-apple;
+    @apply glass rounded-apple px-3 py-2.5 shadow-apple-sm;
   }
   
   /* === TARJETAS === */
@@ -215,23 +234,34 @@ html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--ho
   
   /* === TIPOGRAFÍA === */
   .apple-h1 {
-    @apply text-apple-h1 font-semibold tracking-apple-tight text-white;
+    @apply font-semibold tracking-apple-tight text-white;
+    font-size: 16px;
+    line-height: 22px;
   }
   
   .apple-h2 {
-    @apply text-apple-h2 font-semibold tracking-apple-normal text-white;
+    @apply font-semibold tracking-apple-normal text-white;
+    font-size: 15px;
+    line-height: 21px;
   }
   
   .apple-h3 {
-    @apply text-apple-h3 font-medium tracking-apple-normal text-white;
+    @apply font-medium tracking-apple-normal text-white;
+    font-size: 14px;
+    line-height: 20px;
   }
   
   .apple-body {
-    @apply text-apple-body text-white;
+    @apply text-white;
+    font-size: 13px;
+    line-height: 19px;
   }
   
   .apple-caption {
-    @apply text-apple-caption1 text-app-muted;
+    @apply text-app-muted;
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.04em;
   }
   
   .apple-muted {
@@ -240,7 +270,7 @@ html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--ho
   
   /* === BOTONES === */
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-apple text-apple-body font-medium transition-all duration-200 ease-apple select-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center px-3 py-1.5 rounded-apple text-apple-footnote font-medium transition-all duration-200 ease-apple select-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 disabled:cursor-not-allowed;
   }
   
   .btn-primary {
@@ -272,12 +302,12 @@ html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--ho
   }
   
   .btn-lg {
-    @apply px-6 py-3 text-apple-callout;
+    @apply px-4 py-2 text-apple-body;
   }
   
   /* === CAMPOS DE ENTRADA === */
   .field {
-    @apply w-full px-3 py-2 bg-white/5 border border-white/20 rounded-apple text-apple-body text-white placeholder-app-muted transition-all duration-200 ease-apple focus:outline-none focus:ring-2 focus:ring-apple-blue-500 focus:border-apple-blue-500 focus:bg-white/10;
+    @apply w-full px-3 py-1.5 bg-white/5 border border-white/20 rounded-apple text-apple-footnote text-white placeholder-app-muted transition-all duration-200 ease-apple focus:outline-none focus:ring-2 focus:ring-apple-blue-500 focus:border-apple-blue-500 focus:bg-white/10;
   }
   
   .field-sm {
@@ -286,6 +316,37 @@ html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--ho
   
   .field-lg {
     @apply field px-4 py-3 text-apple-callout;
+  }
+
+  /* Estilo unificado Apple-like para inputs, selects y textareas */
+  .input-apple {
+    @apply w-full rounded-apple border border-white/15 bg-white/5 text-apple-footnote text-white px-3 py-1.5;
+    @apply placeholder:text-apple-gray-500 focus:outline-none focus:ring-2 focus:ring-apple-blue-500 focus:border-apple-blue-500;
+    @apply transition-all duration-200 ease-apple shadow-apple-sm;
+    background-image: radial-gradient(circle at 0 0, rgba(255,255,255,0.18), transparent 55%);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .input-apple:focus {
+    box-shadow: 0 0 0 1px rgba(59,130,246,0.6), 0 0 0 6px rgba(59,130,246,0.18);
+    background-color: rgba(15,23,42,0.9);
+  }
+
+  /* Selects con caret custom al estilo Apple */
+  select.input-apple {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 2.5rem;
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 14px 14px;
+    background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 7L10 12L15 7' stroke='%23A5B4FC' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+
+  select.input-apple:focus {
+    background-color: rgba(15,23,42,0.96);
   }
   
   /* === BADGES === */
@@ -311,6 +372,32 @@ html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--ho
   
   .badge-neutral {
     @apply badge bg-white/10 text-white border border-white/20;
+  }
+
+  /* === PILLS (chips Apple-like) === */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-apple-caption2 font-medium border;
+    @apply bg-white/5 border-white/10 text-apple-gray-200;
+  }
+
+  .pill-soft {
+    @apply pill bg-white/8 border-white/15 text-white;
+  }
+
+  .pill-blue {
+    @apply pill bg-apple-blue-500/15 border-apple-blue-400/40 text-apple-blue-100;
+  }
+
+  .pill-green {
+    @apply pill bg-apple-green-500/15 border-apple-green-400/40 text-apple-green-100;
+  }
+
+  .pill-orange {
+    @apply pill bg-apple-orange-500/15 border-apple-orange-400/40 text-apple-orange-100;
+  }
+
+  .pill-purple {
+    @apply pill bg-purple-500/15 border-purple-400/40 text-purple-100;
   }
   
   /* === TABLAS === */
@@ -407,6 +494,34 @@ html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--ho
     backdrop-filter: blur(40px);
     -webkit-backdrop-filter: blur(40px);
   }
+
+  /* Sidebar shell corporativo: discreto y adaptable a tema */
+  .sidebar-shell {
+    @apply glass backdrop-blur-apple-lg border-r border-[color:var(--app-border)] dark:border-white/10 relative overflow-hidden;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--app-bg-strong) 88%, #020617 12%),
+      color-mix(in srgb, var(--app-bg-strong) 100%, #020617 0%)
+    );
+  }
+
+  .sidebar-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 0% 0%, rgba(148, 163, 184, 0.18), transparent 55%);
+    opacity: 0.8;
+    pointer-events: none;
+  }
+
+  .sidebar-shell::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 32%;
+    background: linear-gradient(to top, rgba(15,23,42,0.65), transparent);
+    pointer-events: none;
+  }
 }
 
 /* ===== LEAFLET OVERRIDES ===== */
@@ -449,15 +564,15 @@ html[data-theme='light'] .hover\:bg-black\/60:hover { background-color: var(--ho
   }
   
   .card {
-    @apply p-4;
+    @apply px-3 py-2.5;
   }
   
   .apple-h1 {
-    @apply text-apple-title1;
+    @apply text-apple-title2;
   }
   
   .apple-h2 {
-    @apply text-apple-title3;
+    @apply text-apple-body;
   }
 }
 

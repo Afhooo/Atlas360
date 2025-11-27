@@ -183,12 +183,12 @@ function validateDevCredentials(username: string, password: string): PersonRecor
 function normalizeRole(rawRole?: string): string {
   const role = String(rawRole || '').trim().toUpperCase();
   
-  if (['GERENCIA', 'GERENTE', 'ADMIN', 'ADMINISTRADOR'].includes(role)) return 'ADMIN';
+  if (['GERENTE', 'GERENCIA', 'ADMIN', 'ADMINISTRADOR'].includes(role)) return 'ADMIN';
   if (['PROMOTOR', 'PROMOTORA'].includes(role)) return 'PROMOTOR';
-  if (['COORDINADOR', 'COORDINADORA', 'COORDINACION'].includes(role)) return 'COORDINADOR';
-  if (['LIDER', 'JEFE', 'SUPERVISOR'].includes(role)) return 'LIDER';
-  if (['ASESOR', 'VENDEDOR', 'VENDEDORA'].includes(role)) return 'ASESOR';
-  if (['LOGISTICA', 'RUTAS', 'DELIVERY'].includes(role)) return 'LOGISTICA';
+  if (['COORDINADOR', 'COORDINADORA', 'COORDINACION', 'SUPERVISOR'].includes(role)) return 'COORDINADOR';
+  if (['LIDER', 'JEFE'].includes(role)) return 'LIDER';
+  if (['ASESOR', 'VENDEDOR', 'VENDEDORA', 'COMERCIAL'].includes(role)) return 'ASESOR';
+  if (['CAJERO', 'CAJERA', 'CAJA', 'LOGISTICA', 'RUTAS', 'DELIVERY'].includes(role)) return 'LOGISTICA';
   
   return 'ASESOR'; // Rol por defecto más seguro
 }
@@ -204,19 +204,56 @@ async function validateCredentials(username: string, password: string) {
   }
 
   if (supabaseAdmin) {
-    const { data, error } = await supabaseAdmin
-      .from('people')
-      .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash')
-      .or(`username_norm.eq.${normalizedInput},email_norm.eq.${normalizedInput}`)
-      .limit(1);
+    // Intento principal: usar índices de login si existen
+    let person: PersonRecord | null = null;
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('people')
+        .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash')
+        .or(`username_norm.eq.${normalizedInput},email_norm.eq.${normalizedInput}`)
+        .limit(1);
 
-    if (error) {
-      console.error('Error consultando usuario:', error);
-      throw new Error('Error interno del servidor');
+      if (error) throw error;
+      person = (data?.[0] as PersonRecord) ?? null;
+    } catch (err: any) {
+      // Fallback: si las columnas de índice no existen (instalaciones nuevas),
+      // buscamos por username/email directos.
+      const code = err?.code || err?.details || '';
+      const msg = String(err?.message || '').toLowerCase();
+      const missingIndex =
+        code === '42703' ||
+        msg.includes('username_norm') ||
+        msg.includes('email_norm');
+
+      if (!missingIndex) {
+        console.error('Error consultando usuario:', err);
+        // Si algo raro pasa con Supabase, intentamos fallback local si está permitido.
+        if (DEV_LOGIN_FALLBACK_ENABLED) {
+          return validateDevCredentials(username, password);
+        }
+        throw new Error('Error interno del servidor');
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('people')
+        .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash')
+        .or(`username.eq.${normalizedInput},email.eq.${normalizedInput}`)
+        .limit(1);
+
+      if (error) {
+        console.error('Error consultando usuario (fallback):', error);
+        if (DEV_LOGIN_FALLBACK_ENABLED) {
+          return validateDevCredentials(username, password);
+        }
+        throw new Error('Error interno del servidor');
+      }
+      person = (data?.[0] as PersonRecord) ?? null;
     }
 
-    const person = data?.[0];
     if (!person) {
+      if (DEV_LOGIN_FALLBACK_ENABLED) {
+        return validateDevCredentials(username, password);
+      }
       throw new Error('Usuario no encontrado');
     }
 
@@ -225,6 +262,10 @@ async function validateCredentials(username: string, password: string) {
     }
 
     if (!person.password_hash) {
+      // En esquemas antiguos sin password_hash, usamos fallback.
+      if (DEV_LOGIN_FALLBACK_ENABLED) {
+        return validateDevCredentials(username, password);
+      }
       throw new Error('Usuario sin contraseña configurada. Contacte al administrador.');
     }
 
@@ -317,7 +358,7 @@ export async function POST(request: NextRequest) {
         username: person.username,
         email: person.email,
         name: person.full_name,
-        role: normalizeRole(person.fenix_role || person.role),
+      role: normalizeRole(person.fenix_role || person.role || undefined),
       },
     });
 

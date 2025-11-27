@@ -679,7 +679,7 @@ export default function AdminUsuariosPage() {
         <div>
           <h1 className="apple-h1 text-white">Usuarios</h1>
           <p className="apple-body text-apple-gray-400">
-            Administra las cuentas y accesos del sistema Atlas 360.
+            Administra las cuentas y accesos del sistema Atlas Suite.
           </p>
         </div>
         <Button leftIcon={<UserPlus size={18} />} onClick={openCreate}>
@@ -930,7 +930,7 @@ export default function AdminUsuariosPage() {
               <p className="apple-body mb-1">Datos mínimos</p>
               <p className="apple-caption text-apple-gray-300">
                 Si no especificas usuario, correo o contraseña, el sistema los generará automáticamente con el dominio
-                configurado en Atlas 360.
+                configurado en Atlas Suite.
               </p>
             </div>
 
