@@ -75,9 +75,9 @@ export default function InventarioPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
             <KpiCard label="Stock total" value={`${metrics.totalUnits.toLocaleString('es-BO')} uds`} helper={money(metrics.totalValue)} />
-            <KpiCard label="Productos críticos" value={lowStock.length} helper="Por debajo del punto de pedido" tone="orange" />
+            <KpiCard label="Productos críticos" value={`${lowStock.length}`} helper="Por debajo del punto de pedido" tone="orange" />
             <KpiCard label="Rotación promedio" value={`${metrics.avgRotation} días`} helper={`Top sucursal: ${metrics.bestBranch}`} tone="green" />
-            <KpiCard label="Movimientos hoy" value={metrics.movementsToday} helper={`${metrics.entriesToday} entradas · ${metrics.exitsToday} salidas`} tone="blue" />
+            <KpiCard label="Movimientos hoy" value={`${metrics.movementsToday}`} helper={`${metrics.entriesToday} entradas · ${metrics.exitsToday} salidas`} tone="blue" />
           </div>
         </div>
       </section>
@@ -97,11 +97,15 @@ export default function InventarioPage() {
         <InsightCard
           title="Reposición inmediata"
           description="Productos que deben reponerse hoy para no frenar ventas."
-          items={lowStock.slice(0, 4).map((item) => ({
-            title: item.name,
-            value: `${item.stock} uds · ${item.branch}`,
-            helper: `Pedido sugerido: +${item.reorderPoint - item.stock} uds`,
-          }))}
+          items={lowStock.slice(0, 4).map((item) => {
+            const reorderPoint = item.reorderPoint ?? 8;
+            const stock = item.stock ?? 0;
+            return {
+              title: item.name,
+              value: `${stock} uds · ${item.branch}`,
+              helper: `Pedido sugerido: +${reorderPoint - stock} uds`,
+            };
+          })}
         />
         <InsightCard
           title="Lentos vs acelerados"
@@ -269,7 +273,7 @@ function KpiCard({
   tone = 'blue',
 }: {
   label: string;
-  value: string;
+  value: string | number;
   helper?: string;
   tone?: 'blue' | 'green' | 'orange';
 }) {

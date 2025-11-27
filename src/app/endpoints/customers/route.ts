@@ -65,7 +65,11 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    let baseQuery = sb!
+    if (!sb) {
+      return NextResponse.json({ ok: false, error: 'supabase_client_unavailable' }, { status: 500 });
+    }
+
+    let baseQuery = sb
       .from('customers')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false });

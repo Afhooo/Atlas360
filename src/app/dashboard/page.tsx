@@ -216,14 +216,14 @@ export default function DashboardHome() {
     >();
 
     business.dailySales.forEach((entry) => {
-      const list = branchMap.get(entry.branch) ?? [];
-      list.push({ date: entry.date, revenue: entry.total, units: entry.units });
-      branchMap.set(entry.branch, list);
+      const bucket = branchMap.get(entry.branch) ?? { entries: [] };
+      bucket.entries.push({ date: entry.date, revenue: entry.total, units: entry.units });
+      branchMap.set(entry.branch, bucket);
     });
 
     return Array.from(branchMap.entries())
-      .map(([branch, entries]) => {
-        entries.sort((a, b) => a.date.localeCompare(b.date));
+      .map(([branch, bucket]) => {
+        const entries = bucket.entries.sort((a, b) => a.date.localeCompare(b.date));
         const recent = entries.slice(-14);
         const last7 = recent.slice(-7);
         const prev7 = entries.slice(Math.max(0, entries.length - 14), entries.length - 7);

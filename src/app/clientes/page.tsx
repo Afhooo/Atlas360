@@ -29,6 +29,13 @@ type Customer = {
   last_order_at: string | null;
 };
 
+type MixItem = {
+  label: string;
+  value: number;
+  share: number;
+  count: number;
+};
+
 type ListResponse = { ok: boolean; data: Customer[]; total: number };
 
 const fetcher = (u: string) => fetch(u, { cache: 'no-store' }).then((r) => r.json());
@@ -452,11 +459,7 @@ function MixBar({
   label,
   value,
   share,
-}: {
-  label: string;
-  value: number;
-  share: number;
-}) {
+}: MixItem) {
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -555,21 +558,22 @@ function getUnique(list: Customer[], selector: (c: Customer) => string | null) {
   return Array.from(set);
 }
 
-function buildMix(
-  list: Customer[],
-  key: 'channel' | 'segment'
-): { label: string; value: number; share: number }[] {
-  const map = new Map<string, number>();
+function buildMix(list: Customer[], key: 'channel' | 'segment'): MixItem[] {
+  const map = new Map<string, { value: number; count: number }>();
   list.forEach((customer) => {
     const label = (customer[key] || 'Sin dato') as string;
-    map.set(label, (map.get(label) ?? 0) + (customer.ltv || 0));
+    const entry = map.get(label) ?? { value: 0, count: 0 };
+    entry.value += customer.ltv || 0;
+    entry.count += 1;
+    map.set(label, entry);
   });
-  const total = Array.from(map.values()).reduce((sum, value) => sum + value, 0);
+  const total = Array.from(map.values()).reduce((sum, entry) => sum + entry.value, 0);
   return Array.from(map.entries())
-    .map(([label, value]) => ({
+    .map(([label, entry]) => ({
       label,
-      value,
-      share: total ? (value / total) * 100 : 0,
+      value: entry.value,
+      share: total ? (entry.value / Math.max(total, 1)) * 100 : 0,
+      count: entry.count,
     }))
     .sort((a, b) => b.value - a.value);
 }

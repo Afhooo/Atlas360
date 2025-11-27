@@ -671,6 +671,9 @@ function InputField({
   icon,
   helper,
   required,
+  min,
+  max,
+  step,
 }: {
   label: string;
   value: any;
@@ -682,6 +685,9 @@ function InputField({
   icon?: ReactNode;
   helper?: ReactNode | string;
   required?: boolean;
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
 }) {
   return (
     <label className="flex flex-col space-y-2 text-sm text-white/90">
@@ -710,6 +716,9 @@ function InputField({
             value={value}
             placeholder={placeholder}
             required={required}
+            min={min}
+            max={max}
+            step={step}
             onChange={(e) => onChange(e.target.value)}
           />
         </div>
