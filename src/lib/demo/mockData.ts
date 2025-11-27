@@ -27,6 +27,16 @@ type ProductSpec = {
   imageUrl?: string | null;
 };
 
+type CustomerProfile = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  channel: string;
+  segment: string;
+  city: string;
+};
+
 const SELLERS: SellerProfile[] = [
   { id: 'admin-demo-id', fullName: 'Ana Delgado', branch: 'Santa Cruz', role: 'ADMIN', channel: 'Asesor' },
   { id: 'coordinator-demo-id', fullName: 'Carlos Rivera', branch: 'La Paz', role: 'COORDINADOR', channel: 'Tienda/Caja' },
@@ -44,7 +54,30 @@ const PRODUCTS: ProductSpec[] = [
   { name: 'MacBook Pro 14" M3', basePrice: 10800 },
 ];
 
-const CUSTOMERS = ['Mariana Suárez', 'José Durán', 'Lucía Paredes', 'Andrea Nava', 'Diego Céspedes', 'Martha Aguilar'];
+const CUSTOMER_PROFILES: CustomerProfile[] = [
+  { id: 'cust-001', name: 'Mariana Suárez', email: 'mariana.suarez@andina.bo', phone: '+59170011001', channel: 'Retail', segment: 'Premium', city: 'Santa Cruz' },
+  { id: 'cust-002', name: 'TecnoSur SRL', email: 'compras@tecnosur.bo', phone: '+59170011002', channel: 'Corporativo', segment: 'Enterprise', city: 'La Paz' },
+  { id: 'cust-003', name: 'José Durán', email: 'jose.duran@gmail.com', phone: '+59170011003', channel: 'Retail', segment: 'Mass Market', city: 'Cochabamba' },
+  { id: 'cust-004', name: 'Lucía Paredes', email: 'lucia.paredes@icloud.com', phone: '+59170011004', channel: 'E-commerce', segment: 'Premium', city: 'Santa Cruz' },
+  { id: 'cust-005', name: 'Andrea Nava', email: 'anava@innova.bo', phone: '+59170011005', channel: 'Corporativo', segment: 'Startup', city: 'La Paz' },
+  { id: 'cust-006', name: 'Diego Céspedes', email: 'diego.cespedes@correo.com', phone: '+59170011006', channel: 'Retail', segment: 'Mass Market', city: 'Cochabamba' },
+  { id: 'cust-007', name: 'Martha Aguilar', email: 'martha.aguilar@finance.bo', phone: '+59170011007', channel: 'Corporativo', segment: 'Key Account', city: 'Santa Cruz' },
+  { id: 'cust-008', name: 'Grupo Altavista', email: 'compras@altavista.bo', phone: '+59170011008', channel: 'Corporativo', segment: 'Enterprise', city: 'Santa Cruz' },
+  { id: 'cust-009', name: 'Karen Montaño', email: 'karen.montano@gmail.com', phone: '+59170011009', channel: 'Retail', segment: 'Premium', city: 'La Paz' },
+  { id: 'cust-010', name: 'Logística Andina', email: 'logistica@andina.bo', phone: '+59170011010', channel: 'Corporativo', segment: 'Logística', city: 'Cochabamba' },
+  { id: 'cust-011', name: 'Carla Mendieta', email: 'carla.mendieta@icloud.com', phone: '+59170011011', channel: 'Retail', segment: 'Premium', city: 'Santa Cruz' },
+  { id: 'cust-012', name: 'Farmacias Vitta', email: 'compras@vitta.bo', phone: '+59170011012', channel: 'Corporativo', segment: 'Salud', city: 'La Paz' },
+  { id: 'cust-013', name: 'SmartHome Bolivia', email: 'ventas@smarthome.bo', phone: '+59170011013', channel: 'E-commerce', segment: 'Startup', city: 'Santa Cruz' },
+  { id: 'cust-014', name: 'Martín Quiroga', email: 'martin.quiroga@gmail.com', phone: '+59170011014', channel: 'Retail', segment: 'Mass Market', city: 'Cochabamba' },
+  { id: 'cust-015', name: 'Fresh Market Bolivia', email: 'compras@freshmarket.bo', phone: '+59170011015', channel: 'Corporativo', segment: 'Retail', city: 'Santa Cruz' },
+  { id: 'cust-016', name: 'Hotel Laguna Azul', email: 'admin@lagunaazul.bo', phone: '+59170011016', channel: 'Corporativo', segment: 'Hospitality', city: 'La Paz' },
+  { id: 'cust-017', name: 'Distribuidora El Puente', email: 'ventas@elpuente.bo', phone: '+59170011017', channel: 'Corporativo', segment: 'Mayorista', city: 'Cochabamba' },
+  { id: 'cust-018', name: 'Natalia Ibáñez', email: 'natalia.ibanez@gmail.com', phone: '+59170011018', channel: 'Retail', segment: 'Premium', city: 'Santa Cruz' },
+  { id: 'cust-019', name: 'AeroLogix', email: 'contacto@aerologix.bo', phone: '+59170011019', channel: 'Corporativo', segment: 'Tecnología', city: 'La Paz' },
+  { id: 'cust-020', name: 'Universidad San Rafael', email: 'adquisiciones@usanrafael.bo', phone: '+59170011020', channel: 'Corporativo', segment: 'Educación', city: 'Cochabamba' },
+];
+
+const CUSTOMER_NAMES = CUSTOMER_PROFILES.map((c) => c.name);
 const RETURN_REASONS = [
   'Cambio de color solicitado',
   'Producto con detalles estéticos',
@@ -91,6 +124,8 @@ type DemoSaleRecord = {
   payment_proof_url: string | null;
   sale_type: 'Por Mayor' | 'Al Detalle';
   order_type: 'Pedido' | 'Encomienda';
+  customer_id: string;
+  customer_name: string;
 };
 
 type DemoSalesSummaryRow = {
@@ -115,6 +150,7 @@ function generateSalesData() {
     for (let i = 0; i < salesCount; i += 1) {
       const seller = i === 0 ? SELLERS[0] : pick(SELLERS);
       const product = pick(PRODUCTS);
+      const customer = pick(CUSTOMER_PROFILES);
       const qty = 1 + Math.floor(rng() * 3);
       const price = Math.round(product.basePrice * (0.9 + rng() * 0.25));
       const subtotal = price * qty;
@@ -141,6 +177,8 @@ function generateSalesData() {
         payment_proof_url: null,
         sale_type,
         order_type,
+        customer_id: customer.id,
+        customer_name: customer.name,
       });
 
       const monthKey = isoDay.slice(0, 7);
@@ -173,6 +211,105 @@ function generateSalesData() {
 const generatedSalesData = generateSalesData();
 export const demoSalesReport = generatedSalesData.salesReport;
 export const demoSalesSummary = generatedSalesData.salesSummary;
+
+type DemoCustomer = CustomerProfile & {
+  created_at: string;
+  owner_id: string;
+  ltv: number;
+  orders_count: number;
+  last_order_at: string | null;
+};
+
+function buildDemoCustomers(sales: DemoSaleRecord[]): DemoCustomer[] {
+  const stats = new Map<string, { total: number; orders: number; last: string | null }>();
+
+  sales.forEach((sale) => {
+    const stat = stats.get(sale.customer_id) ?? { total: 0, orders: 0, last: null };
+    stat.total += sale.subtotal;
+    stat.orders += 1;
+    if (!stat.last || sale.order_date > stat.last) {
+      stat.last = sale.order_date;
+    }
+    stats.set(sale.customer_id, stat);
+  });
+
+  return CUSTOMER_PROFILES.map((profile, idx) => {
+    const owner = SELLERS[idx % SELLERS.length];
+    const created = new Date(SIMULATION_START);
+    created.setUTCDate(created.getUTCDate() + idx * 2);
+    const stat = stats.get(profile.id) ?? { total: 0, orders: 0, last: null };
+
+    return {
+      ...profile,
+      created_at: created.toISOString(),
+      owner_id: owner.id,
+      ltv: stat.total,
+      orders_count: stat.orders,
+      last_order_at: stat.last,
+    };
+  });
+}
+
+export const demoCustomers = buildDemoCustomers(demoSalesReport);
+
+type DemoOpportunity = {
+  id: string;
+  customer_id: string | null;
+  title: string;
+  description: string | null;
+  stage: string;
+  amount: number;
+  currency: string;
+  owner_id: string | null;
+  probability: number;
+  close_date: string | null;
+  source: string | null;
+  created_at: string;
+  customers: { name: string } | null;
+};
+
+const OPPORTUNITY_BLUEPRINTS = [
+  { title: 'Renovación flota iPhone', stage: 'CALIFICADO', base: 28000, source: 'Referido', description: '20 unidades iPhone 15 Pro para equipo comercial', probability: 0.45 },
+  { title: 'Proyecto Mac Studio - Altavista', stage: 'PROPUESTA', base: 42000, source: 'Upsell', description: 'Equipamiento creativo para agencia', probability: 0.55 },
+  { title: 'Kits productividad iPad', stage: 'LEAD', base: 12000, source: 'Evento', description: '10 combos iPad Air + Pencil', probability: 0.25 },
+  { title: 'Contrato soporte TecnoSur', stage: 'GANADO', base: 18000, source: 'Renovación', description: 'Soporte anual y AppleCare+', probability: 0.9 },
+  { title: 'Digitalización Fresh Market', stage: 'PROPUESTA', base: 26000, source: 'Web', description: 'POS móviles y tabletas para tiendas', probability: 0.5 },
+  { title: 'Reemplazo MacBook Banco Norte', stage: 'CALIFICADO', base: 38000, source: 'Canal', description: '25 MacBook Air para analistas', probability: 0.4 },
+  { title: 'Kits promotores retail', stage: 'LEAD', base: 9000, source: 'Promotor', description: 'Equipamiento para nuevos promotores', probability: 0.2 },
+  { title: 'Centro de control AeroLogix', stage: 'PROPUESTA', base: 33000, source: 'Referido', description: 'MacBook Pro + monitores externos', probability: 0.6 },
+  { title: 'Upgrade SmartHome', stage: 'GANADO', base: 14500, source: 'Upsell', description: 'Inventario demos y accesorios', probability: 0.95 },
+  { title: 'Implementación Universidad San Rafael', stage: 'PERDIDO', base: 50000, source: 'Licitación', description: 'Laboratorio completo macOS', probability: 0.05 },
+];
+
+function buildDemoOpportunities(customers: DemoCustomer[]): DemoOpportunity[] {
+  return OPPORTUNITY_BLUEPRINTS.map((blueprint, idx) => {
+    const customer = customers[idx % customers.length];
+    const owner = SELLERS[idx % SELLERS.length];
+    const created = new Date(SIMULATION_REFERENCE);
+    created.setUTCDate(created.getUTCDate() - (idx * 3 + 4));
+    const close = new Date(created);
+    close.setUTCDate(close.getUTCDate() + 12 + (idx % 7));
+    const amount = Math.round(blueprint.base * (0.9 + rng() * 0.25));
+
+    return {
+      id: `opp-demo-${idx + 1}`,
+      customer_id: customer?.id ?? null,
+      title: blueprint.title,
+      description: blueprint.description,
+      stage: blueprint.stage,
+      amount,
+      currency: 'BOB',
+      owner_id: owner.id,
+      probability: blueprint.probability,
+      close_date: close.toISOString().slice(0, 10),
+      source: blueprint.source,
+      created_at: created.toISOString(),
+      customers: customer ? { name: customer.name } : null,
+    };
+  });
+}
+
+export const demoOpportunities = buildDemoOpportunities(demoCustomers);
 
 type DemoReturnRecord = {
   return_id: number;
@@ -208,7 +345,7 @@ function generateReturnsData(sourceSales: DemoSaleRecord[]): DemoReturnRecord[] 
       return_date: returnDate.toISOString().slice(0, 10),
       branch: sale.branch,
       seller_name: sale.seller_full_name || 'Equipo Atlas',
-      customer_name: pick(CUSTOMERS),
+      customer_name: pick(CUSTOMER_NAMES),
       product_name: sale.product_name,
       quantity: sale.quantity,
       return_amount: Math.round(sale.subtotal * (0.85 + rng() * 0.2)),

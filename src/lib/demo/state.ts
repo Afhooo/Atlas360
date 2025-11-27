@@ -3,6 +3,27 @@
 import { useSyncExternalStore } from 'react';
 import { demoInventory } from './mockData';
 
+type SaleCustomer = {
+  name: string;
+  phone?: string;
+  email?: string;
+  document?: string;
+};
+
+type SaleDelivery = {
+  mode: 'pickup' | 'delivery';
+  branch?: string;
+  address?: string;
+  references?: string;
+  scheduledSlot?: string;
+  label?: string;
+};
+
+type SalePayment = {
+  method: string;
+  status: 'pagado' | 'pendiente';
+};
+
 type Sale = {
   id: string;
   productId: string;
@@ -12,6 +33,22 @@ type Sale = {
   price: number;
   total: number;
   ts: number;
+  channel?: string;
+  customer?: SaleCustomer;
+  delivery?: SaleDelivery;
+  payment?: SalePayment;
+  notes?: string;
+};
+
+export type SalePayload = {
+  productId: string;
+  qty: number;
+  price: number;
+  channel?: string;
+  customer?: SaleCustomer;
+  delivery?: SaleDelivery;
+  payment?: SalePayment;
+  notes?: string;
 };
 
 type InventoryItem = {
@@ -74,7 +111,9 @@ function setState(next: DemoState) {
   listeners.forEach((l) => l());
 }
 
-export function recordDemoSale(productId: string, qty: number, price: number) {
+export function recordDemoSale(payload: SalePayload) {
+  const { productId, qty, price, channel, customer, delivery, payment, notes } = payload;
+
   const product = state.inventory.find((p) => p.id === productId);
   if (!product) throw new Error('Producto no encontrado');
   if (qty <= 0 || price <= 0) throw new Error('Cantidad y precio deben ser mayores a 0');
@@ -90,6 +129,11 @@ export function recordDemoSale(productId: string, qty: number, price: number) {
     price,
     total,
     ts: Date.now(),
+    channel,
+    customer,
+    delivery,
+    payment,
+    notes,
   };
 
   const nextInventory = state.inventory.map((p) =>

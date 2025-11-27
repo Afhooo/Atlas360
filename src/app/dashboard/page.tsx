@@ -3,22 +3,18 @@
 
 import useSWR from 'swr';
 import Link from 'next/link';
-import { useMemo, type ComponentProps } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { format, formatDistanceToNow, parseISO, isValid, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
-  Activity, ArrowRight, Bell, ClipboardList, RotateCcw,
-  UserPlus, Users2, DollarSign, Package, Calendar, Settings,
-  AlertTriangle, CheckCircle, Clock, Sparkles, TrendingUp
+  Activity, ArrowRight, Bell, RotateCcw,
+  UserPlus, DollarSign, Package, Calendar,
+  AlertTriangle, CheckCircle, Clock, Sparkles, TrendingUp, Smile, Truck, UserCheck
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { normalizeRole, type Role } from '@/lib/auth/roles';
 
-import WeatherStrip from '@/components/widgets/WeatherStrip';
-import TrafficPanel from '@/components/widgets/TrafficPanel';
-import { ModuleKey, moduleFlags } from '@/lib/config/featureFlags';
-import { canAccessModule } from '@/lib/auth/permissions';
 import { useDemoOps } from '@/lib/demo/state';
 import { useBusinessMock } from '@/lib/demo/useBusinessMock';
 
@@ -30,9 +26,6 @@ const fetcher = async (u: string) => {
   }
   return res.json();
 };
-
-// Derivar el tipo de item desde las props de WeatherStrip
-type Wx = ComponentProps<typeof WeatherStrip>['data'][number];
 
 type AlertItem = {
   id: string;
@@ -54,16 +47,29 @@ type ActivityItem = {
   ts: number;
 };
 
-const MODULES: { title: string; desc: string; href: string; icon: React.ReactNode; module: ModuleKey }[] = [
-  { title: 'Ventas', desc: 'Registra y analiza ventas', href: '/ventas', icon: <TrendingUp size={16} />, module: 'ventas' },
-  { title: 'Inventario', desc: 'Stock y movimientos', href: '/inventario', icon: <Package size={16} />, module: 'inventario' },
-  { title: 'RRHH y asistencia', desc: 'Marcajes y geolocalización', href: '/rrhh', icon: <Calendar size={16} />, module: 'rrhh' },
-  { title: 'Productividad', desc: 'Horas efectivas y métricas', href: '/productividad', icon: <Activity size={16} />, module: 'productividad' },
-  { title: 'Cajas', desc: 'Aperturas y cuadratura', href: '/cajas', icon: <DollarSign size={16} />, module: 'cajas' },
-  { title: 'Configuración', desc: 'Usuarios y roles', href: '/configuracion', icon: <Settings size={16} />, module: 'configuracion' },
+type RangeKey = 'day' | 'week' | 'month';
+
+const RANGE_TABS: { key: RangeKey; label: string }[] = [
+  { key: 'day', label: 'Hoy' },
+  { key: 'week', label: 'Semana' },
+  { key: 'month', label: 'Mes' },
 ];
 
-const CRM_SALES_PATH = '/ventas/registro-crm';
+const RANGE_LABELS: Record<RangeKey, string> = {
+  day: 'Hoy',
+  week: 'Semana',
+  month: 'Mes',
+};
+
+const RANGE_WINDOWS: Record<RangeKey, number> = {
+  day: 0,
+  week: 6,
+  month: 29,
+};
+
+type BusinessMockData = ReturnType<typeof useBusinessMock>;
+
+const CRM_SALES_PATH = '/ventas/registro';
 
 export default function DashboardHome() {
   // === DATA SOURCES ===
@@ -77,56 +83,174 @@ export default function DashboardHome() {
   const todayKey = useMemo(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/La_Paz' }).format(new Date()), []);
   const monthKey = useMemo(() => todayKey.slice(0, 7), [todayKey]);
 
-  const { data: salesSummary } = useSWR('/endpoints/sales-summary', fetcher);
-  const { data: returnsStats } = useSWR('/endpoints/stats/today-returns', fetcher);
   const { data: returnsReport } = useSWR('/endpoints/returns-report', fetcher);
   const { data: mySales } = useSWR(() => (me?.ok ? `/endpoints/my/sales?month=${monthKey}` : null), fetcher);
   const { data: myAttendance } = useSWR(() => (me?.ok && role !== 'promotor' ? `/endpoints/my/attendance?month=${monthKey}` : null), fetcher);
   const { data: salesReport } = useSWR('/endpoints/sales-report', fetcher);
   const { data: overview } = useSWR('/endpoints/metrics/overview', fetcher);
 
-  // Clima y Tráfico
-  const { data: wx } = useSWR(
-    '/endpoints/ops/weather?cities=Cochabamba,El%20Alto,La%20Paz,Santa%20Cruz,Sucre',
-    fetcher
-  );
-  const { data: tr } = useSWR(
-    '/endpoints/ops/traffic?cities=Santa%20Cruz,La%20Paz,Cochabamba,El%20Alto,Sucre',
-    fetcher
+  const [rangeFilter, setRangeFilter] = useState<RangeKey>('day');
+
+  const fallbackStats = useMemo(
+    () => buildFallbackStats(business, todayKey),
+    [business.dailySales, business.dailyReturns, todayKey]
   );
 
-  const overviewToday = overview?.today || { revenue: 0, tickets: 0, units: 0 };
-  const overviewWeek = overview?.week || { revenue: 0, tickets: 0, units: 0 };
-  const overviewMonth = overview?.month || { revenue: 0, tickets: 0, units: 0 };
-  const returnsToday = overview?.returnsToday || { count: 0, amount: 0 };
-  const attendanceToday = overview?.attendanceToday || { marks: 0, people: 0 };
-  const cash = overview?.cash || { today: 0, month: 0 };
-
-  // === DATOS DEL CLIMA ===
-  const toRiskEs = (r: unknown): Wx['risk'] => {
-    const v = String(r ?? '').toLowerCase();
-    if (v === 'high' || v === 'alto') return 'Alto';
-    if (v === 'med' || v === 'medio' || v === 'medium') return 'Medio';
-    if (v === 'low' || v === 'bajo') return 'Bajo';
-    return undefined;
+  const overviewToday = overview?.today || fallbackStats.sales.day;
+  const overviewWeek = overview?.week || fallbackStats.sales.week;
+  const overviewMonth = overview?.month || fallbackStats.sales.month;
+  const attendanceToday = overview?.attendanceToday || fallbackStats.attendance.day;
+  const cash = {
+    today: overview?.cash?.today ?? fallbackStats.cash.day,
+    month: overview?.cash?.month ?? fallbackStats.cash.month,
+    week: fallbackStats.cash.week,
   };
 
-  const weatherData: Wx[] = useMemo(() => {
-    const list = (wx?.cities ?? []) as any[];
-    return list.map((c): Wx => ({
-      city: String(c.city || c.name || ''),
-      tempC: Math.round(Number(c.temp ?? c.tempC ?? 0)),
-      condition: String(c.condition ?? ''),
-      icon: String(c.icon ?? '01d'),
-      rain1h: Number(c.rain_1h ?? c.rain1h ?? 0),
-      windKmh: Number(c.wind_kmh ?? c.windKmh ?? 0),
-      risk: toRiskEs(c.risk),
-    }));
-  }, [wx]);
+  const selectedStats = useMemo(
+    () => buildKpiSnapshot(business, fallbackStats, rangeFilter),
+    [business.dailySales, business.dailyReturns, fallbackStats, rangeFilter]
+  );
+
+  const rangeDescription = useMemo(() => {
+    const last = fallbackStats.lastDate;
+    if (!last) return '';
+    const formatted = formatHeadlineDate(last);
+    if (rangeFilter === 'day') {
+      return `Corte ${formatted}`;
+    }
+    return `${rangeFilter === 'week' ? 'Últimos 7 días' : 'Últimos 30 días'} · hasta ${formatted}`;
+  }, [fallbackStats.lastDate, rangeFilter]);
+
+  const lastSalesDate = business.dailySales.at(-1)?.date ?? todayKey;
+  const lastDateObj = new Date(lastSalesDate);
+  const thirtyDaysAgo = new Date(lastDateObj);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const prevWindowStart = new Date(thirtyDaysAgo);
+  prevWindowStart.setDate(prevWindowStart.getDate() - 30);
+  const windowRange = business.totalByRange(thirtyDaysAgo.toISOString().slice(0, 10), lastSalesDate);
+  const prevRange = business.totalByRange(
+    prevWindowStart.toISOString().slice(0, 10),
+    new Date(thirtyDaysAgo).toISOString().slice(0, 10)
+  );
+
+  const hourlyTrend =
+    windowRange.revenue && prevRange.revenue
+      ? ((windowRange.revenue - prevRange.revenue) / Math.max(prevRange.revenue, 1)) * 100
+      : 0;
+
+  const weeklyTimeline = business.weeklySales.map((point) => ({
+    week: point.week,
+    revenue: point.revenue,
+    target: business.monthlyTargets[point.week.slice(0, 7)]?.revenue ?? 0,
+  }));
+
+  const returnsSeries = Object.entries(business.returnsByWeek)
+    .map(([week, amount]) => ({ week, amount }))
+    .slice(-8);
+
+  const scorecard = useMemo(() => {
+    const monthTarget =
+      (business.monthlyTargets[monthKey]?.revenue ?? fallbackStats.sales.month.revenue) || 1;
+    const ventasActual = fallbackStats.sales.month.revenue;
+    const ventasProgress = Math.min(130, Math.round((ventasActual / Math.max(monthTarget, 1)) * 100));
+    const returnsRate = ventasActual ? fallbackStats.returns.month.amount / ventasActual : 0;
+    const clientesScore = Math.max(60, Math.min(99, 100 - returnsRate * 4200));
+    const operacionesScore = Math.max(
+      55,
+      Math.min(98, 100 - fallbackStats.returns.week.count * 1.4 + fallbackStats.sales.week.tickets * 0.06)
+    );
+    const talentoScore = Math.min(
+      100,
+      Math.round((fallbackStats.attendance.week.marks / Math.max(fallbackStats.attendance.week.people * 8, 1)) * 100)
+    );
+    const productividad = fallbackStats.sales.week.revenue / Math.max(fallbackStats.attendance.week.people, 1);
+
+    return [
+      {
+        key: 'ventas',
+        title: 'Ventas',
+        value: money(ventasActual),
+        sub: `Meta Bs ${money(monthTarget)}`,
+        progress: ventasProgress,
+        trend: hourlyTrend,
+        icon: <TrendingUp size={18} />,
+        tone: 'blue' as const,
+      },
+      {
+        key: 'clientes',
+        title: 'Clientes satisfechos',
+        value: `${(100 - returnsRate * 100).toFixed(1)}%`,
+        sub: `Tasa devoluciones ${(returnsRate * 100).toFixed(1)}%`,
+        progress: clientesScore,
+        trend: -returnsRate * 100,
+        icon: <Smile size={18} />,
+        tone: 'green' as const,
+      },
+      {
+        key: 'operaciones',
+        title: 'Operaciones al día',
+        value: `${operacionesScore.toFixed(0)}%`,
+        sub: `${num(fallbackStats.sales.week.tickets)} tickets / semana`,
+        progress: operacionesScore,
+        trend: operacionesScore - 85,
+        icon: <Truck size={18} />,
+        tone: 'orange' as const,
+      },
+      {
+        key: 'talento',
+        title: 'Talento y productividad',
+        value: `${talentoScore.toFixed(0)}%`,
+        sub: `Bs ${Math.round(productividad).toLocaleString('es-BO')} por persona`,
+        progress: talentoScore,
+        trend: talentoScore - 90,
+        icon: <UserCheck size={18} />,
+        tone: 'purple' as const,
+      },
+    ];
+  }, [business.monthlyTargets, fallbackStats, hourlyTrend, monthKey]);
+
+  const branchPulse = useMemo(() => {
+    const branchMap = new Map<
+      string,
+      { entries: { date: string; revenue: number; units: number }[] }
+    >();
+
+    business.dailySales.forEach((entry) => {
+      const list = branchMap.get(entry.branch) ?? [];
+      list.push({ date: entry.date, revenue: entry.total, units: entry.units });
+      branchMap.set(entry.branch, list);
+    });
+
+    return Array.from(branchMap.entries())
+      .map(([branch, entries]) => {
+        entries.sort((a, b) => a.date.localeCompare(b.date));
+        const recent = entries.slice(-14);
+        const last7 = recent.slice(-7);
+        const prev7 = entries.slice(Math.max(0, entries.length - 14), entries.length - 7);
+        const revenue = last7.reduce((sum, item) => sum + item.revenue, 0);
+        const units = last7.reduce((sum, item) => sum + item.units, 0);
+        const prevRevenue = prev7.reduce((sum, item) => sum + item.revenue, 0);
+        const trend = prevRevenue ? ((revenue - prevRevenue) / Math.max(prevRevenue, 1)) * 100 : 0;
+        const spark = entries.slice(-10).map((item) => ({ date: item.date, revenue: item.revenue }));
+        return { branch, revenue, units, trend, spark };
+      })
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [business.dailySales]);
 
   const alerts = useMemo(() => {
-    if (!Array.isArray(returnsReport)) return [] as AlertItem[];
-    return returnsReport.slice(0, 6).map((item: any, idx: number) => {
+    const source = Array.isArray(returnsReport) && returnsReport.length
+      ? returnsReport
+      : business.dailyReturns.slice(-6).map((item, idx) => ({
+          return_id: `mock-${idx}`,
+          product_name: item.reason,
+          branch: item.branch,
+          return_date: item.date,
+          customer_name: `Cliente ${idx + 1}`,
+          quantity: Math.max(1, Math.round(item.amount / 400)),
+          return_amount: item.amount,
+          reason: item.reason,
+        }));
+    return source.slice(0, 6).map((item: any, idx: number) => {
       const date = parseDate(item?.return_date);
       const titleBase = item?.product_name ? String(item.product_name) : `Devolución #${item?.return_id ?? idx + 1}`;
       const branch = item?.branch ? `(${item.branch})` : '';
@@ -142,12 +266,19 @@ export default function DashboardHome() {
         whenExact: date ? shortDate(date) : null,
       } satisfies AlertItem;
     });
-  }, [returnsReport]);
+  }, [business.dailyReturns, returnsReport]);
 
   const activity = useMemo(() => {
     const events: ActivityItem[] = [];
 
-    const salesList = Array.isArray(mySales?.list) ? mySales.list : [];
+    const salesList = Array.isArray(mySales?.list) && mySales.list.length
+      ? mySales.list
+      : business.dailySales.slice(-8).map((entry, idx) => ({
+          id: `mock-sale-${idx}`,
+          order_date: `${entry.date}T10:00:00Z`,
+          product_name: `${entry.channel} · ${entry.branch}`,
+          total: entry.total,
+        }));
     for (const sale of salesList) {
       const date = parseDate(sale?.order_date ?? sale?.created_at);
       if (!date) continue;
@@ -160,7 +291,16 @@ export default function DashboardHome() {
       });
     }
 
-    const days = Array.isArray(myAttendance?.days) ? myAttendance.days : [];
+    const days = Array.isArray(myAttendance?.days) && myAttendance.days.length
+      ? myAttendance.days
+      : business.dailySales.slice(-5).map((entry, idx) => {
+          const hourOffset = (idx % 4) * 7;
+          return {
+            date: entry.date,
+            first_in: `${entry.date}T08:${String(10 + hourOffset).padStart(2, '0')}:00Z`,
+            last_out: `${entry.date}T18:${String(5 + hourOffset).padStart(2, '0')}:00Z`,
+          };
+        });
     for (const day of days) {
       const firstIn = parseDate(day?.first_in);
       if (firstIn) {
@@ -186,7 +326,7 @@ export default function DashboardHome() {
 
     events.sort((a, b) => b.ts - a.ts);
     return events.slice(0, 8);
-  }, [myAttendance, mySales]);
+  }, [business.dailySales, myAttendance, mySales]);
 
   const weeklySalesReport = useMemo(() => {
     const rows = Array.isArray(salesReport) ? salesReport : [];
@@ -206,32 +346,6 @@ export default function DashboardHome() {
     });
     return { revenue, tickets, units };
   }, [salesReport]);
-
-  const lastSalesDate = business.dailySales.at(-1)?.date ?? todayKey;
-  const lastDateObj = new Date(lastSalesDate);
-  const thirtyDaysAgo = new Date(lastDateObj);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const prevWindowStart = new Date(thirtyDaysAgo);
-  prevWindowStart.setDate(prevWindowStart.getDate() - 30);
-  const windowRange = business.totalByRange(thirtyDaysAgo.toISOString().slice(0, 10), lastSalesDate);
-  const prevRange = business.totalByRange(
-    prevWindowStart.toISOString().slice(0, 10),
-    new Date(thirtyDaysAgo).toISOString().slice(0, 10)
-  );
-
-  const hourlyTrend = windowRange.revenue && prevRange.revenue
-    ? ((windowRange.revenue - prevRange.revenue) / Math.max(prevRange.revenue, 1)) * 100
-    : 0;
-
-  const weeklyTimeline = business.weeklySales.map((point) => ({
-    week: point.week,
-    revenue: point.revenue,
-    target: business.monthlyTargets[point.week.slice(0, 7)]?.revenue ?? 0,
-  }));
-
-  const returnsSeries = Object.entries(business.returnsByWeek)
-    .map(([week, amount]) => ({ week, amount }))
-    .slice(-8);
 
   return (
     <div className="min-h-screen space-y-5 sm:space-y-6">
@@ -291,7 +405,7 @@ export default function DashboardHome() {
                 <DollarSign size={16} />
                 Caja diaria
               </Link>
-              <Link href="/dashboard/inventario" className="btn-secondary btn-sm">
+              <Link href="/inventario" className="btn-secondary btn-sm">
                 <Package size={16} />
                 Ver inventario
               </Link>
@@ -306,35 +420,108 @@ export default function DashboardHome() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.2 }}
       >
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="apple-h3">KPIs operativos</h2>
+            <p className="apple-caption text-apple-gray-400">{selectedStats.description}</p>
+          </div>
+          <div className="inline-flex rounded-apple border border-white/10 bg-white/5 p-1">
+            {RANGE_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setRangeFilter(tab.key)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-[10px] transition ${
+                  rangeFilter === tab.key
+                    ? 'bg-white/20 text-white shadow-apple-sm'
+                    : 'text-apple-gray-400 hover:text-white'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard 
-            title="Ingresos de hoy" 
-            value={money(overviewToday.revenue)} 
-            hint={`${num(overviewToday.units)} uds / ${num(overviewToday.tickets)} tickets`}
+            title={`Ingresos (${selectedStats.label})`} 
+            value={money(selectedStats.sales.revenue)} 
+            hint={`${num(selectedStats.sales.units)} uds / ${num(selectedStats.sales.tickets)} tickets`}
             icon={<DollarSign size={20} />}
             color="blue"
+            trend={formatTrend(selectedStats.sales.trend)}
           />
           <KpiCard 
-            title="Devoluciones (hoy)" 
-            value={num(returnsToday.count)} 
-            hint={money(returnsToday.amount)}
+            title={`Devoluciones (${selectedStats.label})`} 
+            value={num(selectedStats.returns.count)} 
+            hint={money(selectedStats.returns.amount)}
             icon={<RotateCcw size={20} />}
             color="orange"
+            trend={formatTrend(selectedStats.returns.trend, true)}
           />
           <KpiCard 
-            title="Caja (proxy)" 
-            value={money(cash.today)} 
-            hint={`Mes: ${money(cash.month)}`}
+            title={`Caja (${selectedStats.label})`} 
+            value={money(selectedStats.cash.current)} 
+            hint={`Mes: ${money(selectedStats.cash.monthToDate)}`}
             icon={<CheckCircle size={20} />}
             color="green"
           />
           <KpiCard 
-            title="Asistencia hoy" 
-            value={num(attendanceToday.people)} 
-            hint={`${num(attendanceToday.marks)} marcajes`}
+            title={`Asistencia (${selectedStats.label})`} 
+            value={num(selectedStats.attendance.people)} 
+            hint={`${num(selectedStats.attendance.marks)} marcajes`}
             icon={<Calendar size={20} />}
             color="purple"
+            trend={formatTrend(selectedStats.attendance.trend)}
           />
+        </div>
+      </motion.section>
+
+      {/* === SCORECARD EXECUTIVO === */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.26 }}
+      >
+        <div className="glass-card p-4 sm:p-6 space-y-5">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="apple-h3 text-white">Scorecard ejecutivo</h2>
+              <p className="apple-caption text-apple-gray-400">Integración tipo balance scorecard</p>
+            </div>
+            <span className="apple-caption text-apple-gray-500">{rangeDescription}</span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {scorecard.map(({ key, ...tile }) => (
+              <ScoreTile key={key} {...tile} />
+            ))}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* === PULSE DE SUCURSALES === */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.3 }}
+      >
+        <div className="glass-card p-4 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="apple-h3 text-white">Sucursales en tiempo real</h2>
+              <p className="apple-caption text-apple-gray-400">Ingresos y ritmo de tickets últimos 7 días</p>
+            </div>
+            <span className="apple-caption text-apple-gray-500">Actualizado {rangeDescription}</span>
+          </div>
+          {branchPulse.length ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {branchPulse.map((branch) => (
+                <BranchPulseCard key={branch.branch} {...branch} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="Sin datos" subtitle="Conecta tus sucursales para ver el pulso operativo." />
+          )}
         </div>
       </motion.section>
 
@@ -449,125 +636,6 @@ export default function DashboardHome() {
             color="purple"
           />
         </div>
-      </motion.section>
-
-      {/* === ACCIONES RÁPIDAS === */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.3 }}
-      >
-        <div className="glass-card">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-apple-blue-500/15 rounded-apple border border-apple-blue-500/20 text-apple-blue-500">
-                <Sparkles size={16} />
-              </div>
-              <h2 className="apple-h2">Acciones rápidas</h2>
-            </div>
-            <Link
-              href="/dashboard/asesores/playbook-whatsapp"
-              className="text-apple-caption text-apple-gray-500 hover:text-apple-blue-500 transition-colors"
-            >
-              Ver Central Operativa →
-            </Link>
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <QuickAction 
-              href="/dashboard/promotores/registro" 
-              icon={<Users2 size={16} />} 
-              label="Registrar Promotor" 
-              description="Nuevo promotor"
-            />
-            <QuickAction 
-              href={CRM_SALES_PATH} 
-              icon={<UserPlus size={16} />} 
-              label="Registrar venta (asesor)" 
-              description="Captura en CRM"
-            />
-            <QuickAction 
-              href="/dashboard/asesores/devoluciones" 
-              icon={<RotateCcw size={16} />} 
-              label="Nueva Devolución" 
-              description="Procesar devolución"
-            />
-            <QuickAction 
-              href="/dashboard/vendedores" 
-              icon={<ClipboardList size={16} />} 
-              label="Reporte Vendedores" 
-              description="Ver estadísticas"
-            />
-            <QuickAction 
-              href="/dashboard/promotores/admin" 
-              icon={<ClipboardList size={16} />} 
-              label="Reporte Promotores" 
-              description="Análisis de rendimiento"
-            />
-            <QuickAction 
-              href="/dashboard/admin/resumen" 
-              icon={<ClipboardList size={16} />} 
-              label="Reporte Asistencia" 
-              description="Control de asistencia"
-            />
-            <QuickAction 
-              href="/cajas" 
-              icon={<DollarSign size={16} />} 
-              label="Caja diaria" 
-              description="Turnos y cuadratura"
-            />
-          </div>
-        </div>
-      </motion.section>
-
-      {/* === MÓDULOS PRINCIPALES === */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.35 }}
-      >
-        <div className="glass-card p-4 sm:p-6 space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h2 className="apple-h2">Módulos Atlas Suite</h2>
-              <p className="apple-caption text-apple-gray-400">Accede rápido a las áreas clave</p>
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {MODULES.filter((m) => moduleFlags[m.module] && canAccessModule(role, m.module)).map((m) => (
-              <Link
-                key={m.href}
-                href={m.href}
-                className="glass-card p-4 border hover:shadow-apple-lg transition flex items-center gap-3"
-              >
-                <div className="w-10 h-10 rounded-apple bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 border border-white/15 flex items-center justify-center text-apple-blue-200">
-                  {m.icon}
-                </div>
-                <div>
-                  <div className="apple-h4 text-white">{m.title}</div>
-                  <div className="apple-caption text-apple-gray-400">{m.desc}</div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </motion.section>
-
-      {/* === OPERATIVA DEL DÍA === */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.4 }}
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-      >
-        <div className="lg:col-span-2">
-          <WeatherStrip data={weatherData} updatedAt={wx?.ts} />
-        </div>
-        <TrafficPanel
-          incidents={tr?.incidents ?? []}
-          updatedAt={tr?.updatedAt}
-          onMapClick={() => { /* navegación opcional */ }}
-        />
       </motion.section>
 
       {/* === ALERTAS Y ACTIVIDAD === */}
@@ -772,37 +840,94 @@ function KpiCard({
   );
 }
 
-function QuickAction({ 
-  href, 
-  icon, 
-  label, 
-  description 
-}: { 
-  href: string; 
-  icon: React.ReactNode; 
-  label: string;
-  description?: string;
-}) {
+type ScoreTileProps = {
+  key?: string;
+  title: string;
+  value: string;
+  sub: string;
+  progress: number;
+  trend: number;
+  icon: React.ReactNode;
+  tone: 'blue' | 'green' | 'orange' | 'purple';
+};
+
+function ScoreTile({ title, value, sub, progress, trend, icon, tone }: ScoreTileProps) {
+  const tones = {
+    blue: { bg: 'from-apple-blue-500/15 to-apple-blue-600/5 border-apple-blue-500/25', fill: 'bg-apple-blue-500/80' },
+    green: { bg: 'from-apple-green-500/15 to-apple-green-600/5 border-apple-green-500/25', fill: 'bg-apple-green-500/80' },
+    orange: { bg: 'from-apple-orange-500/15 to-apple-orange-600/5 border-apple-orange-500/25', fill: 'bg-apple-orange-500/80' },
+    purple: { bg: 'from-violet-500/15 to-violet-600/5 border-violet-500/25', fill: 'bg-violet-500/80' },
+  } as const;
+  const toneData = tones[tone];
+  const trendColor = trend >= 0 ? 'text-apple-green-400' : 'text-apple-red-400';
+  const trendLabel = `${trend >= 0 ? '+' : ''}${trend.toFixed(1)}%`;
+
   return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.99 }}
-    >
-      <Link
-        href={href}
-        className="group flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-apple hover:bg-white/10 hover:border-white/20 transition-all duration-200 text-left"
-      >
-        <div className="p-2 bg-apple-blue-500/15 border border-apple-blue-500/25 rounded-apple group-hover:bg-apple-blue-500/25 transition-colors">
+    <div className={`p-4 rounded-apple border bg-gradient-to-br ${toneData.bg} flex flex-col gap-3`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="apple-caption text-apple-gray-400">{title}</p>
+          <p className="apple-h3 text-white">{value}</p>
+          <p className="apple-caption text-apple-gray-500">{sub}</p>
+        </div>
+        <div className="w-10 h-10 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-white/70">
           {icon}
         </div>
-        <div className="flex flex-col min-w-0">
-          <div className="apple-body font-medium text-white truncate">{label}</div>
-          {description && (
-            <div className="apple-caption text-apple-gray-400 truncate">{description}</div>
-          )}
+      </div>
+      <div className="space-y-1.5">
+        <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+          <div
+            className={`h-full ${toneData.fill}`}
+            style={{ width: `${Math.min(Math.max(progress, 5), 130)}%` }}
+          />
         </div>
-      </Link>
-    </motion.div>
+        <div className={`apple-caption font-medium ${trendColor}`}>{trendLabel} vs periodo previo</div>
+      </div>
+    </div>
+  );
+}
+
+type BranchPulse = {
+  branch: string;
+  revenue: number;
+  units: number;
+  trend: number;
+  spark: { date: string; revenue: number }[];
+};
+
+function BranchPulseCard({ branch, revenue, units, trend, spark }: BranchPulse) {
+  const trendColor = trend >= 0 ? 'text-apple-green-400' : 'text-apple-red-400';
+
+  return (
+    <div className="rounded-apple border border-white/10 bg-white/5 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-white font-semibold">{branch}</p>
+          <p className="apple-caption text-apple-gray-400">Últimos 7 días</p>
+        </div>
+        <div className={`text-sm font-medium ${trendColor}`}>
+          {trend >= 0 ? '+' : ''}
+          {trend.toFixed(1)}%
+        </div>
+      </div>
+      <div>
+        <p className="text-white text-xl font-semibold">{money(revenue)}</p>
+        <p className="apple-caption text-apple-gray-400">{num(units)} uds</p>
+      </div>
+      <div className="h-16">
+        {spark.length ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={spark} margin={{ top: 5, bottom: 0, left: -20, right: 0 }}>
+              <XAxis dataKey="date" hide />
+              <YAxis hide />
+              <Line type="monotone" dataKey="revenue" stroke="#38bdf8" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="apple-caption text-apple-gray-500">Sin datos</div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -833,6 +958,209 @@ function EmptyState({
 /* ===========================
    UTILIDADES
    =========================== */
+
+type RangeAggregate = { revenue: number; units: number; tickets: number };
+type ReturnAggregate = { count: number; amount: number };
+type AttendanceAggregate = { people: number; marks: number };
+type FallbackStats = {
+  sales: Record<RangeKey, RangeAggregate>;
+  returns: Record<RangeKey, ReturnAggregate>;
+  attendance: Record<RangeKey, AttendanceAggregate>;
+  cash: Record<RangeKey, number>;
+  lastDate: string;
+};
+
+type KpiSnapshot = {
+  label: string;
+  description: string;
+  sales: RangeAggregate & { trend: number };
+  returns: ReturnAggregate & { trend: number };
+  attendance: AttendanceAggregate & { trend: number };
+  cash: { current: number; monthToDate: number };
+};
+
+function buildFallbackStats(business: BusinessMockData, todayKey: string): FallbackStats {
+  const lastSalesDate = business.dailySales.at(-1)?.date ?? todayKey;
+  const lastDate = new Date(`${lastSalesDate}T00:00:00Z`);
+
+  const aggregateSales = (range: RangeKey): RangeAggregate => {
+    const daysBack = RANGE_WINDOWS[range];
+    const start = new Date(lastDate);
+    start.setUTCDate(start.getUTCDate() - daysBack);
+    const startKey = start.toISOString().slice(0, 10);
+    const entries = business.dailySales.filter((entry) => entry.date >= startKey && entry.date <= lastSalesDate);
+    const revenue = entries.reduce((sum, entry) => sum + entry.total, 0);
+    const units = entries.reduce((sum, entry) => sum + entry.units, 0);
+    const tickets = entries.reduce(
+      (sum, entry) => sum + (entry.tickets ?? Math.max(1, Math.round(entry.units * 0.85))),
+      0
+    );
+    return { revenue, units, tickets };
+  };
+
+  const aggregateReturns = (range: RangeKey): ReturnAggregate => {
+    const daysBack = RANGE_WINDOWS[range];
+    const start = new Date(lastDate);
+    start.setUTCDate(start.getUTCDate() - daysBack);
+    const startKey = start.toISOString().slice(0, 10);
+    const entries = business.dailyReturns.filter((entry) => entry.date >= startKey && entry.date <= lastSalesDate);
+    const amount = entries.reduce((sum, entry) => sum + entry.amount, 0);
+    return { count: entries.length, amount };
+  };
+
+  const sales: Record<RangeKey, RangeAggregate> = {
+    day: aggregateSales('day'),
+    week: aggregateSales('week'),
+    month: aggregateSales('month'),
+  };
+
+  const attendance: Record<RangeKey, AttendanceAggregate> = {
+    day: deriveAttendance('day', sales.day.units),
+    week: deriveAttendance('week', sales.week.units),
+    month: deriveAttendance('month', sales.month.units),
+  };
+
+  const returns: Record<RangeKey, ReturnAggregate> = {
+    day: aggregateReturns('day'),
+    week: aggregateReturns('week'),
+    month: aggregateReturns('month'),
+  };
+
+  const cash: Record<RangeKey, number> = {
+    day: Math.round(sales.day.revenue * 0.34),
+    week: Math.round(sales.week.revenue * 0.32),
+    month: Math.round(sales.month.revenue * 0.3),
+  };
+
+  return { sales, returns, attendance, cash, lastDate: lastSalesDate };
+}
+
+function buildKpiSnapshot(
+  business: BusinessMockData,
+  fallback: FallbackStats,
+  range: RangeKey
+): KpiSnapshot {
+  const endKey = business.dailySales.at(-1)?.date ?? fallback.lastDate;
+  const end = new Date(`${endKey}T00:00:00Z`);
+  const days = RANGE_WINDOWS[range];
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - days);
+  const startKey = start.toISOString().slice(0, 10);
+
+  const prevEnd = new Date(start);
+  prevEnd.setUTCDate(prevEnd.getUTCDate() - 1);
+  const prevStart = new Date(prevEnd);
+  prevStart.setUTCDate(prevStart.getUTCDate() - days);
+
+  const salesCurrent = aggregateSalesRange(business.dailySales, startKey, endKey);
+  const salesPrev = aggregateSalesRange(
+    business.dailySales,
+    prevStart.toISOString().slice(0, 10),
+    prevEnd.toISOString().slice(0, 10)
+  );
+
+  const returnsCurrent = aggregateReturnsRange(business.dailyReturns, startKey, endKey);
+  const returnsPrev = aggregateReturnsRange(
+    business.dailyReturns,
+    prevStart.toISOString().slice(0, 10),
+    prevEnd.toISOString().slice(0, 10)
+  );
+
+  const sales =
+    salesCurrent.revenue > 0 ? salesCurrent : fallback.sales[range];
+  const salesPrevValue = salesPrev.revenue > 0 ? salesPrev.revenue : fallback.sales[range].revenue * 0.8;
+
+  const returns =
+    returnsCurrent.amount > 0 ? returnsCurrent : fallback.returns[range];
+  const returnsPrevValue =
+    returnsPrev.amount > 0 ? returnsPrev.amount : Math.max(returns.amount * 0.85, 1);
+
+  const attendance = {
+    ...fallback.attendance[range],
+    trend: 0,
+  };
+
+  const cashCurrent =
+    salesCurrent.revenue > 0
+      ? Math.round(
+          salesCurrent.revenue * (range === 'day' ? 0.34 : range === 'week' ? 0.32 : 0.3)
+        )
+      : fallback.cash[range];
+
+  const description =
+    range === 'day'
+      ? `Hoy · ${formatHeadlineDate(endKey)}`
+      : range === 'week'
+        ? `Últimos 7 días · hasta ${formatHeadlineDate(endKey)}`
+        : `Últimos 30 días · hasta ${formatHeadlineDate(endKey)}`;
+
+  return {
+    label: RANGE_LABELS[range],
+    description,
+    sales: {
+      ...sales,
+      trend: calculateTrend(sales.revenue, salesPrevValue),
+    },
+    returns: {
+      ...returns,
+      trend: calculateTrend(returns.amount, returnsPrevValue),
+    },
+    attendance,
+    cash: {
+      current: cashCurrent,
+      monthToDate: fallback.cash.month,
+    },
+  };
+}
+
+function aggregateSalesRange(
+  entries: BusinessMockData['dailySales'],
+  startKey: string,
+  endKey: string
+): RangeAggregate {
+  const filtered = entries.filter((entry) => entry.date >= startKey && entry.date <= endKey);
+  const revenue = filtered.reduce((sum, entry) => sum + entry.total, 0);
+  const units = filtered.reduce((sum, entry) => sum + entry.units, 0);
+  const tickets = filtered.reduce((sum, entry) => sum + Math.max(1, Math.round(entry.units / 1.3)), 0);
+  return { revenue, units, tickets };
+}
+
+function aggregateReturnsRange(
+  entries: BusinessMockData['dailyReturns'],
+  startKey: string,
+  endKey: string
+): ReturnAggregate {
+  const filtered = entries.filter((entry) => entry.date >= startKey && entry.date <= endKey);
+  const amount = filtered.reduce((sum, entry) => sum + entry.amount, 0);
+  return { count: filtered.length, amount };
+}
+
+function calculateTrend(current: number, previous: number) {
+  if (!previous) return 0;
+  return ((current - previous) / Math.max(previous, 1)) * 100;
+}
+
+function deriveAttendance(range: RangeKey, units: number): AttendanceAggregate {
+  const base = range === 'day' ? 18 : range === 'week' ? 65 : 180;
+  const divisor = range === 'day' ? 2.2 : range === 'week' ? 2.8 : 3.2;
+  const people = Math.max(base, Math.round(units / divisor));
+  const marksMultiplier = range === 'day' ? 2 : range === 'week' ? 8 : 24;
+  return { people, marks: people * marksMultiplier };
+}
+
+function formatHeadlineDate(dateISO: string): string {
+  const parsed = parseDate(dateISO);
+  if (!parsed) return dateISO;
+  return format(parsed, 'dd MMM yyyy', { locale: es });
+}
+
+function formatTrend(value?: number, invert = false) {
+  if (!Number.isFinite(value) || !value) return undefined;
+  const effective = invert ? -value : value;
+  const prefix = effective > 0 ? '+' : '';
+  return `${prefix}${effective.toFixed(1)}% vs periodo previo`;
+}
+
 function num(n: number) { 
   return (n ?? 0).toLocaleString('es-BO'); 
 }

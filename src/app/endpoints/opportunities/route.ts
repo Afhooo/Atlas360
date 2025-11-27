@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, withSupabaseRetry, isSupabaseTransientError } from '@/lib/supabase';
+import { isDemoMode, demoOpportunities } from '@/lib/demo/mockData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,13 +21,30 @@ type OpportunityRow = {
 };
 
 export async function GET(req: NextRequest) {
-  const sb = supabaseAdmin();
+  const demoMode = isDemoMode();
+  const sb = demoMode ? null : supabaseAdmin();
   const { searchParams } = new URL(req.url);
   const stage = (searchParams.get('stage') || '').trim();
   const q = (searchParams.get('q') || '').trim();
 
   try {
-    let base = sb
+    if (demoMode) {
+      let data = demoOpportunities;
+      if (stage) data = data.filter((o) => o.stage === stage.toUpperCase());
+      if (q) {
+        const needle = q.toLowerCase();
+        data = data.filter(
+          (o) =>
+            o.title?.toLowerCase().includes(needle) ||
+            o.description?.toLowerCase().includes(needle) ||
+            o.source?.toLowerCase().includes(needle) ||
+            o.customers?.name?.toLowerCase().includes(needle)
+        );
+      }
+      return NextResponse.json({ ok: true, data });
+    }
+
+    let base = sb!
       .from('opportunities')
       .select('*, customers:customer_id(name), owner:owner_id(full_name)')
       .order('created_at', { ascending: false });
@@ -52,7 +70,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const sb = supabaseAdmin();
+  const demoMode = isDemoMode();
+  const sb = demoMode ? null : supabaseAdmin();
   try {
     const body = (await req.json()) as Partial<OpportunityRow> & {
       title?: string;
@@ -81,8 +100,23 @@ export async function POST(req: NextRequest) {
       source: body.source ?? null,
     };
 
+    if (demoMode) {
+      const customer = demoOpportunities.find((o) => o.customer_id === body.customer_id)?.customers;
+      return NextResponse.json(
+        {
+          ok: true,
+          opportunity: {
+            id: `opp-demo-${Date.now()}`,
+            ...payload,
+            customers: customer ?? (body.customer_id ? { name: `Cliente ${body.customer_id}` } : null),
+          },
+        },
+        { status: 201 }
+      );
+    }
+
     const { data, error } = await withSupabaseRetry(async () =>
-      sb.from('opportunities').insert(payload).select('*, customers:customer_id(name)').maybeSingle()
+      sb!.from('opportunities').insert(payload).select('*, customers:customer_id(name)').maybeSingle()
     );
     if (error) throw error;
 
@@ -95,4 +129,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: error?.message || 'server_error' }, { status: 500 });
   }
 }
-

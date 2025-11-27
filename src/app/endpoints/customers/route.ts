@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, withSupabaseRetry, isSupabaseTransientError } from '@/lib/supabase';
+import { isDemoMode, demoCustomers } from '@/lib/demo/mockData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,8 @@ type OrdersAggRow = {
 };
 
 export async function GET(req: NextRequest) {
-  const sb = supabaseAdmin();
+  const demoMode = isDemoMode();
+  const sb = demoMode ? null : supabaseAdmin();
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get('q') || '').trim();
   const page = Math.max(1, Number(searchParams.get('page') || 1));
@@ -32,7 +34,38 @@ export async function GET(req: NextRequest) {
   const to = from + pageSize - 1;
 
   try {
-    let baseQuery = sb
+    if (demoMode) {
+      const needle = q.toLowerCase();
+      let data = demoCustomers;
+      if (needle) {
+        data = data.filter((customer) => {
+          const haystack = [
+            customer.name,
+            customer.email,
+            customer.phone,
+            customer.channel,
+            customer.segment,
+            customer.city,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(needle);
+        });
+      }
+
+      const total = data.length;
+      const paged = data.slice(from, to + 1);
+      return NextResponse.json({
+        ok: true,
+        data: paged,
+        page,
+        pageSize,
+        total,
+      });
+    }
+
+    let baseQuery = sb!
       .from('customers')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false });
@@ -111,7 +144,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const sb = supabaseAdmin();
+  const demoMode = isDemoMode();
+  const sb = demoMode ? null : supabaseAdmin();
 
   try {
     const body = (await req.json()) as Partial<CustomerRow> & {
@@ -128,6 +162,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'El nombre es obligatorio' }, { status: 400 });
     }
 
+    if (demoMode) {
+      return NextResponse.json(
+        {
+          ok: true,
+          customer: {
+            id: `cust-demo-${Date.now()}`,
+            name,
+            email: body.email?.trim() || null,
+            phone: body.phone?.trim() || null,
+            channel: body.channel?.trim() || 'Retail',
+            segment: body.segment?.trim() || 'Prospecto',
+            created_at: new Date().toISOString(),
+            owner_id: null,
+            ltv: 0,
+            orders_count: 0,
+            last_order_at: null,
+          },
+        },
+        { status: 201 }
+      );
+    }
+
     const payload: Record<string, unknown> = {
       name,
       email: body.email?.trim() || null,
@@ -138,7 +194,7 @@ export async function POST(req: NextRequest) {
     };
 
     const { data, error } = await withSupabaseRetry(async () =>
-      sb.from('customers').insert(payload).select('*').maybeSingle()
+      sb!.from('customers').insert(payload).select('*').maybeSingle()
     );
 
     if (error) throw error;
@@ -152,4 +208,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: error?.message || 'server_error' }, { status: 500 });
   }
 }
-

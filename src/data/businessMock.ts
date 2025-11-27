@@ -12,6 +12,7 @@ const dailySales: {
   channel: string;
   total: number;
   units: number;
+  tickets: number;
 }[] = [];
 
 const dailyInventory: {
@@ -45,7 +46,8 @@ for (let i = 0; i <= daysDiff; i += 1) {
   const channel = CHANNELS[i % CHANNELS.length];
   const total = Math.round(totalBase + (Math.random() * 3000 - 1500));
   const units = Math.round((total / 450) + Math.random() * 20);
-  dailySales.push({ date: iso, branch, channel, total, units });
+  const tickets = Math.max(1, Math.round(units * 0.85 + Math.random() * 6));
+  dailySales.push({ date: iso, branch, channel, total, units, tickets });
 
   const stockLevel = 120 - (Math.sin(i / 7) * 20) + (Math.random() * 10);
   dailyInventory.push({ date: iso, branch, critical: stockLevel < 30, stock: Math.max(5, Math.round(stockLevel)) });
@@ -102,7 +104,8 @@ export function totalByRange(start: string, end: string) {
   const filtered = dailySales.filter((entry) => entry.date >= start && entry.date <= end);
   const revenue = filtered.reduce((sum, entry) => sum + entry.total, 0);
   const units = filtered.reduce((sum, entry) => sum + entry.units, 0);
-  return { revenue, units, days: filtered.length };
+  const tickets = filtered.reduce((sum, entry) => sum + entry.tickets, 0);
+  return { revenue, units, tickets, days: filtered.length };
 }
 
 export function returnsByWeek() {
