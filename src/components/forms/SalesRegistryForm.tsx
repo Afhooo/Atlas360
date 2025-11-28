@@ -103,9 +103,9 @@ const getDefaultDeliveryWindow = () => {
   start.setMinutes(Math.floor(start.getMinutes() / 15) * 15, 0, 0);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
   return {
-    date: formatDateInput(now),
-    from: formatTimeInput(start),
-    to: formatTimeInput(end),
+    delivery_date: formatDateInput(now),
+    delivery_from: formatTimeInput(start),
+    delivery_to: formatTimeInput(end),
   };
 };
 
