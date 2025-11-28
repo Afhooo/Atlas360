@@ -16,6 +16,12 @@ const errorMessage = (err: unknown, fallback: string) => {
   return fallback;
 };
 
+const isMissingColumn = (error: PostgrestError | null, column: string) => {
+  if (!error) return false;
+  const text = `${error.message ?? ''} ${error.details ?? ''}`.toLowerCase();
+  return text.includes(column.toLowerCase());
+};
+
 const PEOPLE_SITE_CHECK = 'people_site_required_except_promotor';
 const PEOPLE_ROLE_CHECK = 'people_role_check';
 const ALLOWED_ROLES = ['ADMIN', 'GERENCIA', 'COORDINADOR', 'LIDER', 'ASESOR', 'PROMOTOR', 'LOGISTICA'] as const;
@@ -231,15 +237,43 @@ export async function POST(
       const salt = await bcrypt.genSalt(10);
       const password_hash = await bcrypt.hash(newPassword, salt);
 
-      const { error } = await supabase
-        .from('people')
-        .update({
-          password_hash,
-          initial_password_plain_text: newPassword,
-        })
-        .eq('id', id);
+      let updatePayload: Record<string, unknown> = {
+        password_hash,
+        password: password_hash,
+        initial_password_plain_text: newPassword,
+      };
 
-      if (error) throw error;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { error } = await supabase.from('people').update(updatePayload).eq('id', id);
+        if (!error) break;
+
+        if (
+          'initial_password_plain_text' in updatePayload &&
+          isMissingColumn(error as PostgrestError, 'initial_password_plain_text')
+        ) {
+          console.warn('[users] people.initial_password_plain_text no existe. Reintentando sin ese campo.');
+          const { initial_password_plain_text: _omit, ...rest } = updatePayload;
+          updatePayload = rest;
+          continue;
+        }
+
+        if ('password_hash' in updatePayload && isMissingColumn(error as PostgrestError, 'password_hash')) {
+          console.warn('[users] people.password_hash no existe. Reintentando sin ese campo.');
+          const { password_hash: _omit, ...rest } = updatePayload;
+          updatePayload = rest;
+          continue;
+        }
+
+        if ('password' in updatePayload && isMissingColumn(error as PostgrestError, 'password')) {
+          console.warn('[users] people.password no existe. Reintentando sin ese campo.');
+          const { password: _omit, ...rest } = updatePayload;
+          updatePayload = rest;
+          continue;
+        }
+
+        throw error;
+      }
+
       return NextResponse.json({ ok: true });
     }
 

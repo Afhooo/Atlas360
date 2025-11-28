@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { normalizeRole, getRoleHomeRoute, type Role } from '@/lib/auth/roles';
@@ -11,12 +12,6 @@ type UserInfo = {
   id?: string;
 };
 
-/**
- * Página de redirección post-login
- * - Obtiene información del usuario autenticado
- * - Redirige a la página apropiada según el rol
- * - Maneja errores de sesión
- */
 export default function PostLoginRouter() {
   const router = useRouter();
   const [status, setStatus] = useState<'checking' | 'redirecting' | 'error'>('checking');
@@ -31,154 +26,125 @@ export default function PostLoginRouter() {
         setStatus('checking');
         setMessage('Verificando sesión…');
 
-        // Obtener información del usuario
-        const response = await fetch('/endpoints/me', { 
+        const response = await fetch('/endpoints/me', {
           cache: 'no-store',
           credentials: 'include',
-          headers: {
-            'Cache-Control': 'no-cache',
-          },
+          headers: { 'Cache-Control': 'no-cache' },
         });
 
         const userData: UserInfo = await response.json();
-
-        if (!response.ok || !userData?.ok) {
-          throw new Error('Sesión inválida');
-        }
-
+        if (!response.ok || !userData?.ok) throw new Error('Sesión inválida');
         if (canceled) return;
 
-        // Guardar información del usuario
         setUserInfo(userData);
-
-        // Normalizar rol y obtener ruta home
         const normalizedRole = normalizeRole(userData.role) as Role;
-        const homeRoute = getRoleHomeRoute(normalizedRole);
-
-        if (!homeRoute || homeRoute === '/post-login') {
-          console.warn('[post-login] Ruta home inválida, usando /dashboard', {
-            role: userData.role,
-            normalizedRole,
-            homeRoute,
-          });
-        }
+        const homeRoute = getRoleHomeRoute(normalizedRole) || '/dashboard';
 
         setStatus('redirecting');
         setMessage(`Bienvenido ${userData.full_name || 'Usuario'}, redirigiendo a tu inicio…`);
 
-        // Pequeño delay para mostrar el mensaje de bienvenida
         setTimeout(() => {
-          router.replace(homeRoute || '/dashboard');
+          router.replace(homeRoute === '/post-login' ? '/dashboard' : homeRoute);
         }, 1500);
-
       } catch (error) {
         console.error('Error en post-login:', error);
-        
         if (canceled) return;
-
         setStatus('error');
-        setMessage('No se pudo resolver tu inicio. Usa los botones de acceso directo.');
+        setMessage('No se pudo resolver tu inicio. Usa los accesos directos.');
       }
     };
 
     redirectUser();
-
     return () => {
       canceled = true;
     };
   }, [router]);
 
+  const quickAccess = [
+    { href: '/dashboard', label: 'Administración', emoji: '🏢' },
+    { href: '/dashboard/asesores/HOME', label: 'Asesores / Vendedores', emoji: '👥' },
+    { href: '/dashboard/promotores', label: 'Promotores', emoji: '📢' },
+    { href: '/logistica', label: 'Logística', emoji: '🚚' },
+  ];
+
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-900">
-      <div className="max-w-md w-full mx-4 p-8 bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-green-500 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">ATLAS 360</h1>
-          <p className="text-gray-300">Sistema de Gestión Integral</p>
-        </div>
+    <main className="relative min-h-screen overflow-hidden bg-[#01030a]">
+      <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#040a1a] to-[#01030a]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_60%)] opacity-60" />
 
-        {/* Status Content */}
-        <div className="text-center mb-8">
-          <p className="text-gray-200 mb-4">{message}</p>
-          
-          {status !== 'error' && (
-            <div className="flex items-center justify-center gap-3 text-gray-400">
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-white rounded-full animate-spin" />
-              <span className="text-sm">Por favor espera…</span>
-            </div>
-          )}
-
-          {userInfo && status === 'redirecting' && (
-            <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-              <p className="text-green-400 text-sm">
-                Rol: {normalizeRole(userInfo.role)}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Error State - Quick Access Buttons */}
-        {status === 'error' && (
-          <div className="space-y-3">
-            <p className="text-center text-gray-400 text-sm mb-4">
-              Acceso directo por rol:
-            </p>
-            
-            <div className="grid grid-cols-1 gap-2">
-              <a
-                href="/dashboard"
-                className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-center transition-colors duration-200 text-sm font-medium"
-              >
-                🏢 Administración
-              </a>
-              
-              <a
-                href="/dashboard/asesores/HOME"
-                className="px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg text-center transition-colors duration-200 text-sm font-medium"
-              >
-                👥 Asesores / Vendedores
-              </a>
-              
-              <a
-                href="/dashboard/promotores"
-                className="px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-center transition-colors duration-200 text-sm font-medium"
-              >
-                📢 Promotores
-              </a>
-              
-              <a
-                href="/logistica"
-                className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-center transition-colors duration-200 text-sm font-medium"
-              >
-                🚚 Logística
-              </a>
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-12">
+        <div className="w-full max-w-3xl rounded-[36px] border border-white/10 bg-white/5 px-6 py-10 shadow-[0_45px_120px_rgba(2,6,23,0.55)] backdrop-blur-[26px] lg:px-10">
+          <div className="flex flex-col gap-8 lg:flex-row">
+            <div className="w-full space-y-5 text-center lg:w-1/2 lg:text-left">
+              <div className="mx-auto h-16 w-16 lg:mx-0">
+                <Image src="/22.svg" alt="Atlas Suite" width={64} height={64} priority className="object-contain" />
+              </div>
+              <div>
+                <p className="text-sm uppercase tracking-[0.35em] text-white/60">Atlas Suite</p>
+                <h1 className="mt-2 text-3xl font-semibold text-white">Validando tu sesión segura</h1>
+                <p className="mt-2 text-white/70">{message}</p>
+              </div>
+              {status !== 'error' ? (
+                <div className="flex flex-col items-center gap-3 lg:items-start">
+                  <div className="w-12 h-12 rounded-full border-2 border-apple-blue-500/70 border-t-transparent animate-spin" />
+                  <span className="text-xs uppercase tracking-[0.3em] text-white/50">Sincronizando</span>
+                  {userInfo && status === 'redirecting' && (
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70">
+                      Rol {normalizeRole(userInfo.role)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-white/70">
+                    No pudimos redirigirte automáticamente. Elige tu módulo para continuar.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {quickAccess.map((cta) => (
+                      <a
+                        key={cta.href}
+                        href={cta.href}
+                        className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-white/80 transition hover:border-white/40 hover:text-white"
+                      >
+                        <span className="mr-2">{cta.emoji}</span>
+                        {cta.label}
+                      </a>
+                    ))}
+                  </div>
+                  <div className="pt-4 text-xs text-white/60">
+                    <a href="/login" className="underline-offset-4 hover:underline">
+                      Volver al login
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="mt-6 pt-4 border-t border-gray-700">
-              <a
-                href="/login"
-                className="block w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-center transition-colors duration-200 text-sm"
-              >
-                ← Volver al Login
-              </a>
+            <div className="w-full space-y-5 rounded-3xl border border-white/10 bg-white/5 px-6 py-6 lg:w-1/2">
+              <p className="text-sm uppercase tracking-[0.35em] text-white/60">Saltos rápidos</p>
+              <ul className="space-y-4 text-left text-white/80">
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-apple-blue-400" />
+                  Integridad de sesión y permisos en curso.
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-apple-green-400" />
+                  Carga de datos operativos en segundo plano.
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-apple-orange-400" />
+                  Redirección automática a tu módulo principal.
+                </li>
+              </ul>
+              {status !== 'error' && (
+                <p className="text-xs text-white/60">
+                  Si la sincronización tarda más de lo habitual, refresca o comunícate con soporte Atlas.
+                </p>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </div>
-
-      {/* Loading Animation Styles */}
-      <style jsx>{`
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-      `}</style>
     </main>
   );
 }

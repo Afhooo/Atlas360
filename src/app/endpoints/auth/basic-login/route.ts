@@ -21,9 +21,9 @@ export async function POST(req: NextRequest) {
 
     // Busca por username exacto o por email (case-insensitive)
     const isEmail = String(username).includes('@');
-    const base = admin
-      .from('people')
-      .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash')
+  const base = admin
+    .from('people')
+    .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash, password')
       .limit(1);
 
     const { data, error } = isEmail
@@ -44,9 +44,10 @@ export async function POST(req: NextRequest) {
     // - Si TIENE hash -> SOLO bcrypt (NO se acepta DEFAULT_PASSWORD).
     // - Si NO tiene hash -> se acepta únicamente DEFAULT_PASSWORD.
     let passOk = false;
-    if (person.password_hash) {
-      try {
-        passOk = await bcrypt.compare(password, person.password_hash);
+  const storedHash = person.password_hash || person.password;
+  if (storedHash) {
+    try {
+      passOk = await bcrypt.compare(password, storedHash);
       } catch {
         passOk = false;
       }

@@ -218,11 +218,15 @@ export const Sidebar: FC<SidebarProps> = ({
       >
         <div className="px-4 py-4 border-b border-[color:var(--app-border)] dark:border-white/10 transition-colors duration-500">
           <Link href={ROUTES.DASH} className="group flex items-center gap-2.5" onClick={onClose}>
-            <div className="relative w-9 h-9">
-              <div className="absolute inset-0 bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 rounded-xl border border-white/20" />
-              <div className="relative w-full h-full flex items-center justify-center">
-                <Image src="/1.png" alt="Atlas Suite" width={24} height={24} className="object-contain" priority />
-              </div>
+            <div className="relative h-10 w-10">
+              <Image
+                src="/22.svg"
+                alt="Atlas Suite"
+                fill
+                priority
+                sizes="40px"
+                className="object-contain"
+              />
             </div>
             <div className="min-w-0 flex-1 leading-tight">
               <div className="text-[13px] font-semibold text-white group-hover:text-apple-blue-300 transition-colors duration-300">

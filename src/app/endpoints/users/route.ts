@@ -21,6 +21,12 @@ const errorMessage = (err: unknown, fallback: string) => {
   return fallback;
 };
 
+const isMissingColumn = (error: PostgrestError | null, column: string) => {
+  if (!error) return false;
+  const text = `${error.message ?? ''} ${error.details ?? ''}`.toLowerCase();
+  return text.includes(column.toLowerCase());
+};
+
 const PEOPLE_SITE_CHECK = 'people_site_required_except_promotor';
 const PEOPLE_ROLE_CHECK = 'people_role_check';
 const ALLOWED_ROLES = [
@@ -300,7 +306,7 @@ export async function POST(req: Request) {
       };
     };
 
-    const basePayload = {
+    const basePayload: Record<string, unknown> = {
       full_name,
       fenix_role,
       role: fenix_role, // legacy columna role exige valor, mantenemos sincronía con fenix_role
@@ -313,6 +319,7 @@ export async function POST(req: Request) {
       email: initialEmail,
       active: true,
       password_hash,
+      password: password_hash,
       initial_password_plain_text: plain,
     };
 
@@ -336,6 +343,27 @@ export async function POST(req: Request) {
 
       const pgError = error as PostgrestError;
       lastError = pgError;
+
+      if (
+        'initial_password_plain_text' in basePayload &&
+        isMissingColumn(pgError, 'initial_password_plain_text')
+      ) {
+        console.warn('[users] people.initial_password_plain_text no existe. Reintentando sin ese campo.');
+        delete basePayload.initial_password_plain_text;
+        continue;
+      }
+
+      if ('password_hash' in basePayload && isMissingColumn(pgError, 'password_hash')) {
+        console.warn('[users] people.password_hash no existe. Reintentando sin ese campo.');
+        delete basePayload.password_hash;
+        continue;
+      }
+
+      if ('password' in basePayload && isMissingColumn(pgError, 'password')) {
+        console.warn('[users] people.password no existe. Reintentando sin ese campo.');
+        delete basePayload.password;
+        continue;
+      }
 
       if (pgError?.code === '23505') {
         // Si el usuario proporcionó username/email, no intentamos regenerar.

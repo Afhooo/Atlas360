@@ -1,6 +1,7 @@
 // src/components/shell/AppShell.tsx
 'use client';
 
+import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { usePathname } from 'next/navigation';
@@ -81,10 +82,22 @@ export function AppShell({ children, title }: AppShellProps) {
 
   if (!me) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="glass-card text-center">
-          <div className="animate-spin w-8 h-8 border-2 border-apple-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="apple-caption">Cargando...</p>
+      <div className="relative min-h-screen overflow-hidden bg-[#01030a]">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#040a1a] to-[#01030a]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_60%)] opacity-70" />
+        <div className="relative z-10 flex min-h-screen items-center justify-center px-6 py-10">
+          <div className="w-full max-w-md rounded-[32px] border border-white/10 bg-white/5 px-8 py-10 text-center shadow-[0_45px_120px_rgba(2,6,23,0.55)] backdrop-blur-[26px]">
+            <div className="mx-auto mb-6 h-16 w-16">
+              <Image src="/22.svg" alt="Atlas Suite" width={64} height={64} priority className="object-contain" />
+            </div>
+            <p className="text-sm uppercase tracking-[0.35em] text-white/60">Atlas Suite</p>
+            <h1 className="mt-2 text-2xl font-semibold text-white">Sincronizando tu sesión</h1>
+            <p className="mt-2 text-sm text-white/65">Validando permisos y datos operativos…</p>
+            <div className="mt-8 flex flex-col items-center gap-3 text-white/70">
+              <div className="w-10 h-10 rounded-full border-2 border-apple-blue-500/70 border-t-transparent animate-spin" />
+              <span className="text-xs uppercase tracking-[0.3em] text-white/50">Cargando</span>
+            </div>
+          </div>
         </div>
       </div>
     );

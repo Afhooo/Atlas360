@@ -32,6 +32,7 @@ type PersonRecord = {
   privilege_level?: number | null;
   active?: boolean | null;
   password_hash?: string | null;
+  password?: string | null;
 };
 
 type DevUser = {
@@ -205,7 +206,7 @@ async function validateCredentials(username: string, password: string) {
     try {
       const { data, error } = await supabaseAdmin
         .from('people')
-        .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash')
+        .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash, password')
         .or(`username_norm.eq.${normalizedInput},email_norm.eq.${normalizedInput}`)
         .limit(1);
 
@@ -232,7 +233,7 @@ async function validateCredentials(username: string, password: string) {
 
       const { data, error } = await supabaseAdmin
         .from('people')
-        .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash')
+        .select('id, username, email, full_name, role, fenix_role, privilege_level, active, password_hash, password')
         .or(`username.eq.${normalizedInput},email.eq.${normalizedInput}`)
         .limit(1);
 
@@ -257,15 +258,15 @@ async function validateCredentials(username: string, password: string) {
       throw new Error('Usuario deshabilitado');
     }
 
-    if (!person.password_hash) {
-      // En esquemas antiguos sin password_hash, usamos fallback.
+    const storedHash = person.password_hash || person.password || null;
+    if (!storedHash) {
       if (DEV_LOGIN_FALLBACK_ENABLED) {
         return validateDevCredentials(username, password);
       }
       throw new Error('Usuario sin contraseña configurada. Contacte al administrador.');
     }
 
-    const isValidPassword = await bcrypt.compare(password, person.password_hash);
+    const isValidPassword = await bcrypt.compare(password, storedHash);
     if (!isValidPassword) {
       throw new Error('Contraseña incorrecta');
     }
