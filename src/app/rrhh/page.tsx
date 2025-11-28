@@ -2,6 +2,7 @@
 
 import { MapPin, CalendarDays, Clock } from 'lucide-react';
 import { demoAttendanceMarks } from '@/lib/demo/mockData';
+import { SectionCard } from '@/components/ui/SectionCard';
 
 export default function RrhhPage() {
   const marks = demoAttendanceMarks;
@@ -15,14 +16,11 @@ export default function RrhhPage() {
         </p>
       </header>
 
-      <section className="glass-card p-4 sm:p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <CalendarDays className="text-apple-blue-300" size={20} />
-          <div>
-            <h2 className="apple-h3 text-white">Marcajes recientes</h2>
-            <p className="apple-caption text-apple-gray-400">Entradas y salidas con ubicación</p>
-          </div>
-        </div>
+      <SectionCard
+        icon={<CalendarDays className="text-apple-blue-300" size={20} />}
+        title="Marcajes recientes"
+        description="Entradas y salidas con ubicación"
+      >
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -50,20 +48,17 @@ export default function RrhhPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </SectionCard>
 
-      <section className="glass-card p-4 sm:p-6">
-        <div className="flex items-center gap-3 mb-3">
-          <Clock className="text-apple-blue-300" size={20} />
-          <div>
-            <h2 className="apple-h3 text-white">Mapa de asistencia</h2>
-            <p className="apple-caption text-apple-gray-400">Placeholder listo para geolocalización</p>
-          </div>
-        </div>
+      <SectionCard
+        icon={<Clock className="text-apple-blue-300" size={20} />}
+        title="Mapa de asistencia"
+        description="Placeholder listo para geolocalización"
+      >
         <div className="rounded-2xl border border-white/10 bg-black/40 h-64 flex items-center justify-center text-apple-gray-500">
           Próximamente: mapa con pines de marcaje y validación de geocerca.
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }

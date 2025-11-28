@@ -1,7 +1,7 @@
 'use client';
 
 import type { OrderRow, OrderStatus } from '@/lib/types';
-import { User, Package, Truck } from 'lucide-react';
+import { User, Package, Truck, Check } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 // --- Sub-componentes para el nuevo diseño ---
@@ -70,6 +70,78 @@ const EncomiendaDates = ({ order }: { order: OrderRow }) => {
           <span>Entrega: {formatDate(order.fecha_entrega_encomienda)}</span>
         </div>
       )}
+    </div>
+  );
+};
+
+const TIMELINE_STEPS: Array<{ key: OrderStatus; label: string }> = [
+  { key: 'pending', label: 'Pendiente' },
+  { key: 'assigned', label: 'Asignado' },
+  { key: 'out_for_delivery', label: 'En ruta' },
+  { key: 'confirmed', label: 'Confirmado' },
+];
+
+const HALT_STATUSES = new Set<OrderStatus | string>(['cancelled', 'failed', 'returned']);
+
+const OrderTimeline = ({ status }: { status: OrderStatus | string | null }) => {
+  const currentStatus = status ?? 'pending';
+  if (HALT_STATUSES.has(currentStatus)) {
+    const label =
+      currentStatus === 'cancelled'
+        ? 'Pedido cancelado'
+        : currentStatus === 'failed'
+        ? 'Entrega fallida'
+        : 'Pedido devuelto';
+    return (
+      <div className="mt-3 text-xs text-rose-300 dark:text-rose-200">
+        Flujo detenido · {label}
+      </div>
+    );
+  }
+
+  const normalizedStatus = currentStatus === 'delivered' ? 'confirmed' : currentStatus;
+  const currentIndex = TIMELINE_STEPS.findIndex((step) => step.key === normalizedStatus);
+  const activeIndex = currentIndex >= 0 ? currentIndex : 0;
+
+  return (
+    <div className="mt-3 space-y-1">
+      <div className="flex items-center gap-2">
+        {TIMELINE_STEPS.map((step, idx) => {
+          const completed = idx < activeIndex;
+          const active = idx === activeIndex;
+          return (
+            <div key={step.key} className="flex items-center flex-1 min-w-[48px]">
+              <div
+                className={cn(
+                  'w-7 h-7 rounded-full border-2 flex items-center justify-center text-[11px] font-semibold transition-colors',
+                  completed
+                    ? 'bg-apple-green-500/20 border-apple-green-400 text-apple-green-100'
+                    : active
+                    ? 'border-apple-blue-400 text-apple-blue-100'
+                    : 'border-[color:var(--app-border)] text-[color:var(--app-muted)] dark:border-slate-600 dark:text-slate-500'
+                )}
+              >
+                {completed ? <Check size={12} /> : idx + 1}
+              </div>
+              {idx < TIMELINE_STEPS.length - 1 && (
+                <div
+                  className={cn(
+                    'flex-1 h-px mx-2',
+                    completed || active
+                      ? 'bg-apple-green-400/60'
+                      : 'bg-[color:var(--app-border)] dark:bg-slate-600'
+                  )}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-[color:var(--app-muted)] dark:text-slate-500">
+        {TIMELINE_STEPS.map((step) => (
+          <span key={step.key}>{step.label}</span>
+        ))}
+      </div>
     </div>
   );
 };
@@ -169,6 +241,10 @@ export function OrderTable({ orders, onRowClick }: { orders: OrderRow[], onRowCl
                   Destino: {order.destino}
                 </div>
               )}
+            </div>
+
+            <div className="lg:col-span-4">
+              <OrderTimeline status={order.status} />
             </div>
           </div>
         ))}

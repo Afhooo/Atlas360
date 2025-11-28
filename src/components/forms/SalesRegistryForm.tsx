@@ -30,6 +30,9 @@ interface OrderState {
   destino: string;
   payment_method: string;
   payment_status: 'pagado' | 'pendiente' | null;
+  delivery_date: string;
+  delivery_from: string;
+  delivery_to: string;
 }
 
 interface NewItemState {
@@ -84,6 +87,28 @@ const mapPaymentToEnum = (
   return null;
 };
 
+const formatDateInput = (date: Date): string => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const formatTimeInput = (date: Date): string => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const getDefaultDeliveryWindow = () => {
+  const now = new Date();
+  const start = new Date(now.getTime() + 60 * 60 * 1000);
+  start.setMinutes(Math.floor(start.getMinutes() / 15) * 15, 0, 0);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  return {
+    date: formatDateInput(now),
+    from: formatTimeInput(start),
+    to: formatTimeInput(end),
+  };
+};
+
 const getInitialOrderState = (): OrderState => ({
   items: [],
   customer_name: '',
@@ -93,6 +118,7 @@ const getInitialOrderState = (): OrderState => ({
   destino: '',
   payment_method: '',
   payment_status: null,
+  ...getDefaultDeliveryWindow(),
 });
 
 // --- COMPONENTE COMPARTIDO DEL FORMULARIO ---
@@ -306,6 +332,18 @@ export default function SalesRegistryForm() {
           alert('Selecciona método de pago y estado (pagado / pendiente).');
           return;
         }
+        if (!order.delivery_date) {
+          alert('Selecciona la fecha estimada de entrega.');
+          return;
+        }
+        if (!order.delivery_from || !order.delivery_to) {
+          alert('Completa la ventana de entrega (desde y hasta).');
+          return;
+        }
+        if (order.delivery_from >= order.delivery_to) {
+          alert('La hora de inicio debe ser anterior a la hora de fin.');
+          return;
+        }
 
         setIsLoading(true);
 
@@ -359,9 +397,10 @@ export default function SalesRegistryForm() {
               payment_method: paymentMethodEnum,
               address,
               notes: paymentNote,
-              delivery_date: null,
-              delivery_from: null,
-              delivery_to: null,
+              delivery_date: order.delivery_date,
+              delivery_from: order.delivery_from,
+              delivery_to: order.delivery_to,
+              is_encomienda: order.is_encomienda,
               sistema: false,
               items: itemsPayload,
             }),
@@ -660,6 +699,41 @@ export default function SalesRegistryForm() {
                   />
                 </div>
               )}
+              <div className="border border-gray-700 rounded-lg p-3 space-y-3 bg-gray-900/40">
+                <p className="text-sm font-medium text-gray-200">Ventana estimada de entrega</p>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Fecha</label>
+                    <input
+                      type="date"
+                      value={order.delivery_date}
+                      onChange={(e) => setOrder((p) => ({ ...p, delivery_date: e.target.value }))}
+                      className="w-full bg-gray-800 rounded px-3 py-2 border border-gray-600 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Desde</label>
+                    <input
+                      type="time"
+                      value={order.delivery_from}
+                      onChange={(e) => setOrder((p) => ({ ...p, delivery_from: e.target.value }))}
+                      className="w-full bg-gray-800 rounded px-3 py-2 border border-gray-600 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                    <input
+                      type="time"
+                      value={order.delivery_to}
+                      onChange={(e) => setOrder((p) => ({ ...p, delivery_to: e.target.value }))}
+                      className="w-full bg-gray-800 rounded px-3 py-2 border border-gray-600 text-sm"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Esta ventana se mostrará en Logística para programar la ruta y avisar a Caja.
+                </p>
+              </div>
             </section>
 
             {/* Pago */}

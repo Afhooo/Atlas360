@@ -427,6 +427,7 @@ export default function CapturaPage() {
         delivery_date: order.delivery_date || null,
         delivery_from: order.delivery_from || null,
         delivery_to: order.delivery_to || null,
+        is_encomienda: order.is_encomienda,
         sistema: false,
         items: order.items.map(it => ({
           product_code: it.product_code || null,

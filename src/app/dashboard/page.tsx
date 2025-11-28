@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { normalizeRole, type Role } from '@/lib/auth/roles';
-
+import { KpiCard as SharedKpiCard } from '@/components/ui/KpiCard';
 import { useDemoOps } from '@/lib/demo/state';
 import { useBusinessMock } from '@/lib/demo/useBusinessMock';
 
@@ -443,36 +443,36 @@ export default function DashboardHome() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard 
-            title={`Ingresos (${selectedStats.label})`} 
-            value={money(selectedStats.sales.revenue)} 
-            hint={`${num(selectedStats.sales.units)} uds / ${num(selectedStats.sales.tickets)} tickets`}
+          <SharedKpiCard
+            label={`Ingresos (${selectedStats.label})`}
+            value={money(selectedStats.sales.revenue)}
+            helper={`${num(selectedStats.sales.units)} uds · ${num(selectedStats.sales.tickets)} tickets`}
             icon={<DollarSign size={20} />}
-            color="blue"
-            trend={formatTrend(selectedStats.sales.trend)}
+            tone="blue"
+            trendLabel={formatTrend(selectedStats.sales.trend)}
           />
-          <KpiCard 
-            title={`Devoluciones (${selectedStats.label})`} 
-            value={num(selectedStats.returns.count)} 
-            hint={money(selectedStats.returns.amount)}
+          <SharedKpiCard
+            label={`Devoluciones (${selectedStats.label})`}
+            value={num(selectedStats.returns.count)}
+            helper={money(selectedStats.returns.amount)}
             icon={<RotateCcw size={20} />}
-            color="orange"
-            trend={formatTrend(selectedStats.returns.trend, true)}
+            tone="orange"
+            trendLabel={formatTrend(selectedStats.returns.trend, true)}
           />
-          <KpiCard 
-            title={`Caja (${selectedStats.label})`} 
-            value={money(selectedStats.cash.current)} 
-            hint={`Mes: ${money(selectedStats.cash.monthToDate)}`}
+          <SharedKpiCard
+            label={`Caja (${selectedStats.label})`}
+            value={money(selectedStats.cash.current)}
+            helper={`Mes: ${money(selectedStats.cash.monthToDate)}`}
             icon={<CheckCircle size={20} />}
-            color="green"
+            tone="green"
           />
-          <KpiCard 
-            title={`Asistencia (${selectedStats.label})`} 
-            value={num(selectedStats.attendance.people)} 
-            hint={`${num(selectedStats.attendance.marks)} marcajes`}
+          <SharedKpiCard
+            label={`Asistencia (${selectedStats.label})`}
+            value={num(selectedStats.attendance.people)}
+            helper={`${num(selectedStats.attendance.marks)} marcajes`}
             icon={<Calendar size={20} />}
-            color="purple"
-            trend={formatTrend(selectedStats.attendance.trend)}
+            tone="purple"
+            trendLabel={formatTrend(selectedStats.attendance.trend)}
           />
         </div>
       </motion.section>
@@ -614,26 +614,28 @@ export default function DashboardHome() {
         transition={{ duration: 0.6, delay: 0.32 }}
       >
         <div className="grid gap-3 md:grid-cols-3">
-          <KpiCard
-            title="Ventas semana"
+          <SharedKpiCard
+            label="Ventas semana"
             value={money(overviewWeek.revenue || weeklySalesReport.revenue)}
-            hint={`${num(overviewWeek.tickets || weeklySalesReport.tickets)} tickets / ${num(overviewWeek.units || weeklySalesReport.units)} uds`}
+            helper={`${num(overviewWeek.tickets || weeklySalesReport.tickets)} tickets · ${num(
+              overviewWeek.units || weeklySalesReport.units
+            )} uds`}
             icon={<TrendingUp size={20} />}
-            color="blue"
+            tone="blue"
           />
-          <KpiCard
-            title="Ventas del mes"
+          <SharedKpiCard
+            label="Ventas del mes"
             value={money(overviewMonth.revenue)}
-            hint={`${num(overviewMonth.units)} uds`}
+            helper={`${num(overviewMonth.units)} uds`}
             icon={<DollarSign size={20} />}
-            color="green"
+            tone="green"
           />
-          <KpiCard
-            title="Asistencia"
+          <SharedKpiCard
+            label="Asistencia"
             value={num(attendanceToday.people)}
-            hint={`${num(attendanceToday.marks)} marcajes`}
+            helper={`${num(attendanceToday.marks)} marcajes`}
             icon={<Calendar size={20} />}
-            color="purple"
+            tone="purple"
           />
         </div>
       </motion.section>
@@ -768,75 +770,6 @@ export default function DashboardHome() {
         </div>
       </motion.section>
     </div>
-  );
-}
-
-/* ===========================
-   COMPONENTES UI
-   =========================== */
-
-function KpiCard({ 
-  title, 
-  value, 
-  hint, 
-  icon, 
-  trend, 
-  color = 'blue' 
-}: { 
-  title: string; 
-  value: string; 
-  hint?: string; 
-  icon?: React.ReactNode;
-  trend?: string;
-  color?: 'blue' | 'green' | 'orange' | 'red' | 'purple';
-}) {
-  const colorClasses = {
-    blue: 'from-apple-blue-500/24 via-apple-blue-600/14 to-apple-blue-900/40 border-apple-blue-500/40 text-apple-blue-300',
-    green: 'from-apple-green-500/24 via-apple-green-600/14 to-apple-green-900/40 border-apple-green-500/40 text-apple-green-300',
-    orange: 'from-apple-orange-500/24 via-apple-orange-600/14 to-apple-orange-900/40 border-apple-orange-500/40 text-apple-orange-300',
-    red: 'from-apple-red-500/24 via-apple-red-600/14 to-apple-red-900/40 border-apple-red-500/40 text-apple-red-300',
-    purple: 'from-apple-blue-500/30 via-violet-600/20 to-apple-purple-900/40 border-apple-purple-500/40 text-apple-purple-300',
-  } as const;
-
-  return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.99 }}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-      className="glass-card transition-all duration-300 relative overflow-hidden"
-    >
-      <div className="pointer-events-none absolute inset-px rounded-[10px] bg-gradient-to-br from-white/4 via-transparent to-white/0" />
-      <div className="flex items-start justify-between mb-4 relative z-10">
-        <div>
-          <div className="apple-caption text-apple-gray-400 mb-1">{title}</div>
-          {hint && (
-            <div className="apple-caption text-apple-gray-500 sm:hidden">{hint}</div>
-          )}
-        </div>
-        {icon && (
-          <div className={`w-9 h-9 rounded-[999px] bg-gradient-to-br ${colorClasses[color]} border flex items-center justify-center shadow-apple-sm`}>
-            {icon}
-          </div>
-        )}
-      </div>
-      
-      <div className="apple-h2 text-white mb-1 relative z-10 text-[14px] leading-[18px]">
-        {value}
-      </div>
-      
-      <div className="flex items-center justify-between relative z-10">
-        {hint && (
-          <div className="apple-caption text-apple-gray-500 hidden sm:block">{hint}</div>
-        )}
-        {trend && (
-          <div className={`apple-caption font-medium ${trend.startsWith('+') ? 'text-apple-green-400' : trend.startsWith('-') ? 'text-apple-red-400' : 'text-apple-gray-400'}`}>
-            {trend}
-          </div>
-        )}
-      </div>
-    </motion.div>
   );
 }
 

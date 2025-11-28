@@ -43,9 +43,15 @@ type Payload = {
   delivery_date?: string | null;     // 'YYYY-MM-DD'
   delivery_from?: string | null;     // 'HH:mm'
   delivery_to?: string | null;       // 'HH:mm'
+  is_encomienda?: boolean | null;
 
   sistema?: boolean;
   items: OrderItemIn[];
+};
+
+type InventoryAdjustItem = {
+  product_code: string | null;
+  quantity: number;
 };
 
 const money = (n: number): number =>
@@ -61,6 +67,104 @@ function normalizeSalesRole(role: string | null | undefined): 'ASESOR' | 'PROMOT
   if (!role) return null;
   const upper = role.trim().toUpperCase();
   return upper === 'ASESOR' || upper === 'PROMOTOR' ? upper : null;
+}
+
+const siteIdCache = new Map<LocalOption, string | null>();
+
+async function resolveSiteIdForLocal(
+  supabase: SupabaseClient,
+  local: LocalOption
+): Promise<string | null> {
+  if (siteIdCache.has(local)) {
+    return siteIdCache.get(local)!;
+  }
+
+  const { data, error } = await supabase
+    .from('sites')
+    .select('id')
+    .ilike('name', `%${local}%`)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') {
+    console.warn('[orders] No se pudo resolver site para local', { local, error: error.message });
+    siteIdCache.set(local, null);
+    return null;
+  }
+
+  const siteId = data?.id ?? null;
+  siteIdCache.set(local, siteId);
+  return siteId;
+}
+
+async function adjustInventoryAfterOrder(args: {
+  supabase: SupabaseClient;
+  local: LocalOption;
+  items: InventoryAdjustItem[];
+}) {
+  const { supabase, local, items } = args;
+  if (!items.length) return;
+
+  const recognized = items
+    .map((item) => ({
+      code: (item.product_code || '').trim(),
+      quantity: Number(item.quantity || 0),
+    }))
+    .filter((item) => item.code && item.quantity > 0);
+
+  if (!recognized.length) return;
+
+  const siteId = await resolveSiteIdForLocal(supabase, local);
+  if (!siteId) {
+    return;
+  }
+
+  const uniqueSkus = Array.from(new Set(recognized.map((item) => item.code)));
+  if (!uniqueSkus.length) return;
+
+  const { data: products, error } = await supabase
+    .from('inventory_products')
+    .select('id, sku')
+    .in('sku', uniqueSkus);
+
+  if (error) {
+    console.error('[orders] No se pudo obtener productos de inventario', error);
+    return;
+  }
+
+  if (!products?.length) return;
+
+  const skuToProduct = new Map<string, string>();
+  for (const product of products) {
+    if (product?.sku && product?.id) {
+      skuToProduct.set(product.sku, product.id);
+    }
+  }
+
+  const aggregated = new Map<string, number>();
+  for (const item of recognized) {
+    const productId = skuToProduct.get(item.code);
+    if (!productId) continue;
+    aggregated.set(productId, (aggregated.get(productId) ?? 0) + item.quantity);
+  }
+
+  if (!aggregated.size) return;
+
+  await Promise.all(
+    Array.from(aggregated.entries()).map(async ([productId, qty]) => {
+      if (!(qty > 0)) return;
+      const { error: consumeError } = await supabase.rpc('fn_inventory_consume_stock', {
+        p_product_id: productId,
+        p_site_id: siteId,
+        p_quantity: qty,
+      });
+
+      if (consumeError) {
+        console.error('[orders] Error al descontar stock', { productId, siteId, error: consumeError });
+      }
+    })
+  );
 }
 
 async function resolveSalesRole(
@@ -138,6 +242,7 @@ export async function POST(req: NextRequest) {
       destino, customer_id, customer_phone = null, numero = null,
       customer_name, payment_method = null, address = null, notes = null,
       delivery_date = null, delivery_from = null, delivery_to = null,
+      is_encomienda = null,
       sistema = false,
       items,
     } = body;
@@ -215,6 +320,7 @@ export async function POST(req: NextRequest) {
             delivery_date: delivery_date ? delivery_date : null,
             delivery_from: delivery_from ? delivery_from : null,
             delivery_to: delivery_to ? delivery_to : null,
+            is_encomienda: typeof is_encomienda === 'boolean' ? is_encomienda : null,
             items_summary,
           }])
           .select('id, order_no')
@@ -294,6 +400,19 @@ export async function POST(req: NextRequest) {
         },
         { status: 500 }
       );
+    }
+
+    try {
+      await adjustInventoryAfterOrder({
+        supabase,
+        local,
+        items: itemsPayload.map(({ product_code, quantity }) => ({
+          product_code,
+          quantity,
+        })),
+      });
+    } catch (inventoryErr) {
+      console.error('[orders] Ajuste de inventario falló', inventoryErr);
     }
 
     // 3) GEO-CODIFICACIÓN AUTOMÁTICA (no bloqueante)

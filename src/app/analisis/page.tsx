@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { demoSalesReport, demoInventory, demoReturnsReport, demoOpportunities } from '@/lib/demo/mockData';
+import { KpiCard as SharedKpiCard } from '@/components/ui/KpiCard';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url, { cache: 'no-store' });
@@ -247,24 +248,27 @@ export default function AnalisisPage() {
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
-            <KpiCard
+            <SharedKpiCard
               label="Ingresos hoy"
               value={money(stats.today.revenue)}
               helper={`${stats.today.tickets} tickets · ${stats.today.units} uds`}
-              trend={stats.dayDelta}
+              trendLabel={`${stats.dayDelta >= 0 ? '+' : ''}${stats.dayDelta.toFixed(1)}% vs ayer`}
+              tone="blue"
             />
-            <KpiCard
+            <SharedKpiCard
               label="Semana en curso"
               value={money(stats.week.revenue)}
               helper={`Vs semana previa: ${money(localSnapshot.prevWeek.revenue)}`}
-              trend={stats.weekDelta}
+              trendLabel={`${stats.weekDelta >= 0 ? '+' : ''}${stats.weekDelta.toFixed(1)}% vs semana previa`}
+              tone="green"
             />
-            <KpiCard
+            <SharedKpiCard
               label="Mes acumulado"
               value={money(stats.month.revenue)}
               helper={`${stats.month.units} uds totales`}
+              tone="blue"
             />
-            <KpiCard
+            <SharedKpiCard
               label="Devoluciones hoy"
               value={money(stats.returnsToday.amount)}
               helper={`${stats.returnsToday.count} casos reportados`}
@@ -801,38 +805,6 @@ function AlertsPanel({ alerts }: { alerts: Alert[] }) {
         ))}
       </div>
     </section>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  helper,
-  trend,
-  tone = 'blue',
-}: {
-  label: string;
-  value: string;
-  helper?: string;
-  trend?: number;
-  tone?: 'blue' | 'green' | 'orange';
-}) {
-  const palette: Record<typeof tone, string> = {
-    blue: 'from-apple-blue-500/20 via-apple-blue-600/10 to-apple-blue-900/40 border-apple-blue-500/40',
-    green: 'from-apple-green-500/20 via-apple-green-600/10 to-apple-green-900/40 border-apple-green-500/40',
-    orange: 'from-apple-orange-500/20 via-apple-orange-600/10 to-apple-orange-900/40 border-apple-orange-500/40',
-  };
-  const trendLabel = typeof trend === 'number' ? `${trend >= 0 ? '+' : ''}${trend.toFixed(1)}%` : null;
-  return (
-    <div className="glass-card p-4 border bg-white/5 relative overflow-hidden">
-      <div className={`pointer-events-none absolute inset-px rounded-[10px] bg-gradient-to-br ${palette[tone]}`} />
-      <div className="relative z-10 space-y-1">
-        <p className="apple-caption text-apple-gray-300">{label}</p>
-        <p className="text-2xl font-semibold text-white">{value}</p>
-        {helper && <p className="apple-caption text-apple-gray-500">{helper}</p>}
-        {trendLabel && <p className="apple-caption text-apple-gray-400">{trendLabel}</p>}
-      </div>
-    </div>
   );
 }
 

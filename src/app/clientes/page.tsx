@@ -15,6 +15,7 @@ import {
   Tag,
   LineChart,
 } from 'lucide-react';
+import { SectionCard } from '@/components/ui/SectionCard';
 
 type Customer = {
   id: string;
@@ -153,19 +154,16 @@ export default function ClientesPage() {
         <SummaryCard label="Pedidos acumulados" value={totals.tickets} icon={<LineChart size={18} />} tone="purple" />
       </section>
 
-  <section className="glass-card p-4 sm:p-6 space-y-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-apple bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 border border-white/15 flex items-center justify-center text-apple-blue-200">
-              <Users size={18} />
-            </div>
-            <div>
-              <h2 className="apple-h3 text-white">Explora tu base</h2>
-              <p className="apple-caption text-apple-gray-400">
-                Filtros inteligentes por canal, segmento o búsqueda libre.
-              </p>
-            </div>
+  <SectionCard
+        icon={
+          <div className="w-11 h-11 rounded-apple bg-gradient-to-br from-apple-blue-500/20 to-apple-green-500/20 border border-white/15 flex items-center justify-center text-apple-blue-200">
+            <Users size={18} />
           </div>
+        }
+        title="Explora tu base"
+        description="Filtros inteligentes por canal, segmento o búsqueda libre."
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-3">
             <div className="relative w-full sm:w-64">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-apple-gray-500" />
@@ -241,10 +239,10 @@ export default function ClientesPage() {
               {segmentMix.map((item) => (
                 <SegmentChip key={item.label} {...item} />
               ))}
-            </InsightPanel>
+           </InsightPanel>
 
             <AnimatePresence>
-              {showForm && (
+             {showForm && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -294,7 +292,7 @@ export default function ClientesPage() {
             </AnimatePresence>
           </div>
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }

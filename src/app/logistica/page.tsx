@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -297,7 +298,15 @@ export default function LogisticaPage() {
   // --- ESTADOS LOCALES (solo para la UI) - SIN CAMBIOS ---
   const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<any | null>(null);
-  const [filters, setFilters] = useState({ status: 'all' as OrderStatus | 'all', search: '' });
+  const [filters, setFilters] = useState<{
+    status: OrderStatus | 'all';
+    search: string;
+    source: 'all' | 'crm' | 'atlas' | 'promotor';
+  }>({
+    status: 'all',
+    search: '',
+    source: 'all',
+  });
   const [isMapOpen, setIsMapOpen] = useState(false);
 
   // --- LÓGICA DE UI Y DATOS DERIVADOS - SIN CAMBIOS ---
@@ -334,10 +343,33 @@ export default function LogisticaPage() {
     efficiency: { value: visibleOrders.length > 0 ? Math.round((visibleOrders.filter(o => ['delivered', 'confirmed'].includes(o.status || '')).length / visibleOrders.length) * 100) : 0, trend: 1.7 },
   }), [visibleOrders]);
 
+  const activeCustomers = useMemo(() => {
+    const ids = new Set<string>();
+    visibleOrders.forEach((order) => {
+      const key =
+        order.customer_id ||
+        order.customer_phone ||
+        order.customer_name ||
+        '';
+      if (key) ids.add(key);
+    });
+    return ids.size;
+  }, [visibleOrders]);
+
   // Filtro de pedidos
   const filteredOrders = useMemo(() => {
     return visibleOrders.filter((order) => {
       if (filters.status !== 'all' && order.status !== filters.status) return false;
+
+      // Origen del pedido: CRM (Salesforce/HubSpot vía integración), Promotor o Atlas interno
+      const isCrmOrder = !!order.sistema || !!order.sales_role || !!order.sales_user_id;
+      const isPromotorOrder = order.sales_role === 'PROMOTOR' || !!order.is_promoter;
+      const isAtlasInternal = !isCrmOrder && !isPromotorOrder;
+
+      if (filters.source === 'crm' && !isCrmOrder) return false;
+      if (filters.source === 'promotor' && !isPromotorOrder) return false;
+      if (filters.source === 'atlas' && !isAtlasInternal) return false;
+
       if (filters.search) {
         const search = filters.search.toLowerCase();
         const sellerName = Array.isArray(order.seller_profile) ? order.seller_profile[0]?.full_name : order.seller_profile?.full_name;
@@ -442,36 +474,51 @@ export default function LogisticaPage() {
                 <Truck size={28} className="text-apple-blue-400" />
               </div>
               <div>
-                <h1 className="apple-h1 mb-2">Centro de Logística</h1>
-                <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.3em] text-apple-gray-200">
+                  <Route size={14} />
+                  <span>CRM · Ventas · Logística</span>
+                </div>
+                <h1 className="apple-h1 mb-1 mt-3">Logística omnicanal</h1>
+                <p className="apple-caption text-apple-gray-300 max-w-xl">
+                  Último tramo conectado con las ventas de Atlas: pedidos que nacen en el CRM, promotores o caja en una sola consola operativa.
+                </p>
+                <div className="mt-2 flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-apple-green-400 animate-pulse' : 'bg-apple-orange-400'}`} />
                   <span className="apple-caption text-[color:var(--app-muted)] dark:text-apple-gray-400">
-                    {isLive ? 'Sistema en línea' : 'Reconectando...'}
+                    {isLive ? 'Sincronización en línea' : 'Reconectando...'}
                   </span>
                 </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => loadData(true)}
-                disabled={loading}
-                className="btn-primary"
-              >
-                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                {loading ? 'Actualizando...' : 'Actualizar'}
-              </button>
-              <button
-                onClick={() => setIsMapOpen(true)}
-                className="btn-secondary"
-              >
-                <MapIcon size={16} />
-                Vista de Mapa
-              </button>
-              <button className="btn-success">
-                <PlusCircle size={16} />
-                Nuevo Pedido
-              </button>
+            <div className="flex flex-col items-stretch sm:items-end gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => loadData(true)}
+                  disabled={loading}
+                  className="btn-primary"
+                >
+                  <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                  {loading ? 'Actualizando...' : 'Actualizar'}
+                </button>
+                <button
+                  onClick={() => setIsMapOpen(true)}
+                  className="btn-secondary"
+                >
+                  <MapIcon size={16} />
+                  Vista de mapa
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link href="/oportunidades" className="btn-ghost btn-sm">
+                  <Target size={14} />
+                  Pipeline CRM
+                </Link>
+                <Link href="/clientes" className="btn-ghost btn-sm">
+                  <Users size={14} />
+                  Clientes
+                </Link>
+              </div>
             </div>
           </div>
         </motion.header>
@@ -556,7 +603,7 @@ export default function LogisticaPage() {
                 <div className="p-2 bg-apple-blue-500/20 border border-apple-blue-500/30 rounded-apple">
                   <Filter size={18} className="text-apple-blue-400" />
                 </div>
-                <h3 className="apple-h3 text-[color:var(--app-foreground)] dark:text-white">Filtrar por Estado</h3>
+                <h3 className="apple-h3 text-[color:var(--app-foreground)] dark:text-white">Filtros operativos</h3>
               </div>
               <div className="badge badge-primary">{filteredOrders.length} pedidos</div>
             </div>
@@ -564,6 +611,31 @@ export default function LogisticaPage() {
               currentStatus={filters.status} 
               onStatusChange={(status) => setFilters({...filters, status})} 
             />
+            <div className="mt-4 flex flex-wrap gap-2 text-sm">
+              <span className="apple-caption text-[color:var(--app-muted)] dark:text-apple-gray-400">
+                Origen:
+              </span>
+              {[
+                { id: 'all', label: 'Todos' },
+                { id: 'crm', label: 'CRM externo' },
+                { id: 'promotor', label: 'Promotor' },
+                { id: 'atlas', label: 'Atlas interno' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setFilters((prev) => ({ ...prev, source: opt.id as any }))}
+                  className={cn(
+                    'px-3 py-1.5 rounded-full border text-xs transition',
+                    filters.source === opt.id
+                      ? 'bg-white/20 border-white/40 text-white'
+                      : 'bg-white/5 border-white/10 text-apple-gray-300 hover:bg-white/10'
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </motion.section>
           
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -749,6 +821,41 @@ export default function LogisticaPage() {
                     </div>
                     <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                   </motion.button>
+                </div>
+              </div>
+
+              {/* Integración CRM */}
+              <div className="glass-card transition-colors duration-500">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-apple-blue-500/20 border border-apple-blue-500/30 rounded-apple">
+                    <Route size={18} className="text-apple-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="apple-h4 text-[color:var(--app-foreground)] dark:text-white">Integración CRM</h3>
+                    <p className="apple-caption text-[color:var(--app-muted)] dark:text-apple-gray-400">
+                      Pedidos conectados con tu CRM y con las ventas de Atlas.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2 apple-caption text-apple-gray-300">
+                  <p>
+                    Clientes con pedidos activos:{' '}
+                    <span className="text-white font-semibold">{activeCustomers}</span>
+                  </p>
+                  <p>
+                    Pedidos activos en logística:{' '}
+                    <span className="text-white font-semibold">{visibleOrders.length}</span>
+                  </p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link href="/clientes" className="btn-ghost btn-xs">
+                    <Users size={14} />
+                    Ver clientes
+                  </Link>
+                  <Link href="/oportunidades" className="btn-ghost btn-xs">
+                    <Target size={14} />
+                    Ver pipeline
+                  </Link>
                 </div>
               </div>
             </motion.div>

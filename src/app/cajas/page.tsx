@@ -3,6 +3,7 @@
 import { CheckCircle2, AlertTriangle, CircleDollarSign } from 'lucide-react';
 import { demoCajas } from '@/lib/demo/mockData';
 import { useDemoOps } from '@/lib/demo/state';
+import { SectionCard } from '@/components/ui/SectionCard';
 
 type Cierre = (typeof demoCajas)[number] & { cajero?: string };
 
@@ -80,8 +81,7 @@ export default function CajasPage() {
         </div>
       </section>
 
-      <section className="glass-card p-4 sm:p-6 space-y-4">
-        <h2 className="apple-h3 text-white">Cierres recientes</h2>
+      <SectionCard title="Cierres recientes">
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -120,7 +120,7 @@ export default function CajasPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }

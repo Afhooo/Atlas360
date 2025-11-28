@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useDemoOps } from '@/lib/demo/state';
 import { demoInventory } from '@/lib/demo/mockData';
+import { SectionCard } from '@/components/ui/SectionCard';
 
 const MOVEMENTS = demoInventory.movements;
 
@@ -118,12 +119,11 @@ export default function InventarioPage() {
         />
       </section>
 
-      <section className="glass-card p-4 sm:p-6 space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Package size={18} className="text-apple-blue-300" />
-          <h2 className="apple-h3 text-white">Inventario por producto</h2>
-          <p className="apple-caption text-apple-gray-400">Filtra y prioriza desde este tablero.</p>
-        </div>
+      <SectionCard
+        icon={<Package size={18} className="text-apple-blue-300" />}
+        title="Inventario por producto"
+        description="Filtra y prioriza desde este tablero."
+      >
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -158,19 +158,18 @@ export default function InventarioPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </SectionCard>
 
-      <section className="glass-card p-4 sm:p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <ArrowLeftRight size={18} className="text-apple-green-300" />
-          <h2 className="apple-h3 text-white">Movimientos recientes (Kardex)</h2>
-        </div>
+      <SectionCard
+        icon={<ArrowLeftRight size={18} className="text-apple-green-300" />}
+        title="Movimientos recientes (Kardex)"
+      >
         <div className="grid gap-3 lg:grid-cols-2">
           {MOVEMENTS.map((movement) => (
             <MovementCard key={movement.id} movement={movement} />
           ))}
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }

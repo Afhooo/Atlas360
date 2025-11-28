@@ -21,6 +21,7 @@ import {
   Home,
 } from 'lucide-react';
 import { useDemoOps, recordDemoSale } from '@/lib/demo/state';
+import { SectionCard } from '@/components/ui/SectionCard';
 
 type InventoryItem = ReturnType<typeof useDemoOps>['inventory'][number];
 
@@ -645,18 +646,9 @@ function FormSection({
   children: ReactNode;
 }) {
   return (
-    <section className="glass-card p-4 sm:p-6 space-y-4">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-apple bg-white/5 border border-white/15 flex items-center justify-center text-apple-gray-100">
-          {icon}
-        </div>
-        <div>
-          <h2 className="apple-h3 text-white">{title}</h2>
-          <p className="apple-caption text-apple-gray-400">{description}</p>
-        </div>
-      </div>
+    <SectionCard icon={icon} title={title} description={description}>
       {children}
-    </section>
+    </SectionCard>
   );
 }
 
