@@ -456,6 +456,56 @@ export const demoAttendance = {
   raw: [],
 };
 
+type DemoAttendanceMark = {
+  id: string;
+  person: string;
+  type: 'Entrada' | 'Salida';
+  time: string;
+  site: string;
+  geo: string;
+};
+
+function buildDemoAttendanceMarks(days = 35) {
+  const tzFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/La_Paz' });
+  const marks: DemoAttendanceMark[] = [];
+
+  for (let day = 0; day < days; day += 1) {
+    const base = new Date();
+    base.setUTCHours(0, 0, 0, 0);
+    base.setUTCDate(base.getUTCDate() - day);
+    const dateStr = tzFormatter.format(base);
+
+    SELLERS.forEach((seller, idx) => {
+      const entryHour = 8 + (idx % 2) + Math.floor(rng() * 2);
+      const exitHour = 17 + (idx % 3) + Math.floor(rng() * 2);
+      const entryMinute = Math.floor(rng() * 55);
+      const exitMinute = Math.floor(rng() * 55);
+      const geoOk = rng() > 0.08;
+      const geoFlag = geoOk ? 'GPS ok' : 'GPS revisar';
+
+      marks.push({
+        id: `att-${day}-${seller.id}-in`,
+        person: seller.fullName,
+        type: 'Entrada',
+        time: `${dateStr} ${pad(entryHour)}:${pad(entryMinute)}`,
+        site: seller.branch,
+        geo: geoFlag,
+      });
+
+      marks.push({
+        id: `att-${day}-${seller.id}-out`,
+        person: seller.fullName,
+        type: 'Salida',
+        time: `${dateStr} ${pad(exitHour)}:${pad(exitMinute)}`,
+        site: seller.branch,
+        geo: geoFlag,
+      });
+    });
+  }
+
+  return marks.sort((a, b) => (a.time < b.time ? 1 : -1));
+}
+
 const todayIso = new Date().toISOString();
 
 export const demoWeather = {
@@ -663,6 +713,7 @@ export const demoInventory = {
       id: 'p-iph15pro-256',
       name: 'iPhone 15 Pro · 256GB',
       sku: 'IP15-PRO-256',
+      barcode: '7750010010012',
       branch: 'Santa Cruz',
       stock: 26,
       rotationDays: 15,
@@ -676,6 +727,7 @@ export const demoInventory = {
       id: 'p-iph15-128',
       name: 'iPhone 15 · 128GB',
       sku: 'IP15-128',
+      barcode: '7750010010029',
       branch: 'La Paz',
       stock: 34,
       rotationDays: 18,
@@ -689,6 +741,7 @@ export const demoInventory = {
       id: 'p-iph14plus',
       name: 'iPhone 14 Plus · 128GB',
       sku: 'IP14-PLUS',
+      barcode: '7750010010036',
       branch: 'Cochabamba',
       stock: 19,
       rotationDays: 21,
@@ -702,6 +755,7 @@ export const demoInventory = {
       id: 'p-macair-m3',
       name: 'MacBook Air 13" · M3 · 16GB/512GB',
       sku: 'MBA13-M3-16-512',
+      barcode: '7750010010043',
       branch: 'La Paz',
       stock: 14,
       rotationDays: 24,
@@ -715,6 +769,7 @@ export const demoInventory = {
       id: 'p-macpro-14',
       name: 'MacBook Pro 14" · M3 Pro',
       sku: 'MBP14-M3P',
+      barcode: '7750010010050',
       branch: 'Santa Cruz',
       stock: 9,
       rotationDays: 27,
@@ -728,6 +783,7 @@ export const demoInventory = {
       id: 'p-ipad-air',
       name: 'iPad Air M2 · 256GB',
       sku: 'IPAD-AIR-M2',
+      barcode: '7750010010067',
       branch: 'Santa Cruz',
       stock: 22,
       rotationDays: 19,
@@ -741,6 +797,7 @@ export const demoInventory = {
       id: 'p-ipad-mini',
       name: 'iPad mini 6 · 64GB',
       sku: 'IPAD-MINI-6',
+      barcode: '7750010010074',
       branch: 'Cochabamba',
       stock: 17,
       rotationDays: 23,
@@ -754,6 +811,7 @@ export const demoInventory = {
       id: 'p-watch-s9',
       name: 'Apple Watch Series 9 GPS',
       sku: 'AW-S9-GPS',
+      barcode: '7750010010081',
       branch: 'Cochabamba',
       stock: 28,
       rotationDays: 14,
@@ -767,6 +825,7 @@ export const demoInventory = {
       id: 'p-watch-ultra2',
       name: 'Apple Watch Ultra 2',
       sku: 'AW-ULTRA2',
+      barcode: '7750010010098',
       branch: 'Santa Cruz',
       stock: 6,
       rotationDays: 30,
@@ -780,6 +839,7 @@ export const demoInventory = {
       id: 'p-airpods-pro2',
       name: 'AirPods Pro (2da generación)',
       sku: 'APP-PRO2',
+      barcode: '7750010010104',
       branch: 'Santa Cruz',
       stock: 48,
       rotationDays: 9,
@@ -793,6 +853,7 @@ export const demoInventory = {
       id: 'p-pencil-pro',
       name: 'Apple Pencil Pro',
       sku: 'PENCIL-PRO',
+      barcode: '7750010010111',
       branch: 'La Paz',
       stock: 25,
       rotationDays: 16,
@@ -806,6 +867,7 @@ export const demoInventory = {
       id: 'combo-iphone-care',
       name: 'Combo iPhone 15 Pro + AppleCare+',
       sku: 'CB-IP15-CARE',
+      barcode: '7750010099002',
       branch: 'Santa Cruz',
       stock: 11,
       rotationDays: 12,
@@ -823,6 +885,7 @@ export const demoInventory = {
       id: 'combo-macair-creative',
       name: 'Kit MacBook Air + AirPods Pro',
       sku: 'CB-MBA-AUDIO',
+      barcode: '7750010099019',
       branch: 'La Paz',
       stock: 7,
       rotationDays: 14,
@@ -840,6 +903,7 @@ export const demoInventory = {
       id: 'combo-ipad-productividad',
       name: 'Combo Productividad iPad Air + Pencil + Smart Keyboard',
       sku: 'CB-IPAD-PROD',
+      barcode: '7750010099026',
       branch: 'Santa Cruz',
       stock: 10,
       rotationDays: 11,
@@ -866,11 +930,7 @@ export const demoInventory = {
   ],
 };
 
-export const demoAttendanceMarks = [
-  { id: 'att-1', person: 'Ana Delgado', type: 'Entrada', time: `${today} 08:58`, site: 'Santa Cruz', geo: 'GPS ok' },
-  { id: 'att-2', person: 'Carlos Rivera', type: 'Entrada', time: `${today} 09:05`, site: 'La Paz', geo: 'GPS ok' },
-  { id: 'att-3', person: 'Gabriela Rojas', type: 'Salida', time: `${today} 18:05`, site: 'Cochabamba', geo: 'GPS ok' },
-];
+export const demoAttendanceMarks = buildDemoAttendanceMarks(45);
 
 export const demoProductividad = {
   resumen: [

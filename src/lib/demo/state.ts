@@ -55,6 +55,7 @@ type InventoryItem = {
   id: string;
   name: string;
   sku: string;
+  barcode: string;
   branch: string;
   stock: number;
   price?: number;
@@ -87,6 +88,7 @@ const baseInventorySnapshot = (): InventoryItem[] =>
     id: String(p.id),
     name: String(p.name),
     sku: String(p.sku),
+    barcode: String(p.barcode || p.sku || p.id),
     branch: String(p.branch),
     stock: Number(p.stock ?? 0),
     price: fallbackPrice(String(p.name), p.price),

@@ -12,7 +12,6 @@ import {
 import type { FC, ReactNode } from 'react';
 import { useState, useEffect } from 'react';
 import LogoutButton from '@/components/LogoutButton';
-import { ThemeToggle } from '@/components/ThemeToggle';
 
 // Importa roles SOLO desde lib/auth/roles
 import { can, ROUTES, type Role } from '@/lib/auth/roles';
@@ -280,8 +279,6 @@ export const Sidebar: FC<SidebarProps> = ({
         </nav>
 
         <div className="p-3 mt-auto space-y-3 border-t border-[color:var(--app-border)] dark:border-white/10">
-          <ThemeToggle />
-
           <motion.div
             whileHover={{ scale: 1.02 }}
             className="flex items-center gap-2.5 p-2.5 rounded-xl transition-all duration-300 bg-[color:var(--glass-card-bg,rgba(255,255,255,0.7))] hover:bg-[color:var(--hover-surface)] dark:bg-white/5 dark:hover:bg-white/10"

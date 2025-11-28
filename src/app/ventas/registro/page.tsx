@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import {
   CheckCircle2,
   AlertCircle,
@@ -19,9 +19,12 @@ import {
   ClipboardList,
   CreditCard,
   Home,
+  ScanLine,
 } from 'lucide-react';
 import { useDemoOps, recordDemoSale } from '@/lib/demo/state';
 import { SectionCard } from '@/components/ui/SectionCard';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { findProductByCode, normalizeBarcode } from '@/lib/utils/barcodes';
 
 type InventoryItem = ReturnType<typeof useDemoOps>['inventory'][number];
 
@@ -48,6 +51,11 @@ type FormState = {
   paymentMethod: string;
   paymentStatus: PaymentStatus;
 };
+
+type ScanStatus =
+  | { code: string; status: 'found'; product: string; qty: number; ts: number }
+  | { code: string; status: 'missing'; ts: number }
+  | { code: string; status: 'noStock'; product: string; ts: number };
 
 const CHANNEL_OPTIONS = ['Tienda física', 'WhatsApp', 'Instagram', 'Referido', 'Ecommerce'];
 const PAYMENT_METHODS = ['POS', 'Efectivo', 'Transferencia', 'QR', 'Crédito interno'];
@@ -93,6 +101,8 @@ export default function RegistrarVentaPage() {
     paymentStatus: 'pagado',
   }));
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [manualCode, setManualCode] = useState('');
+  const [lastScan, setLastScan] = useState<ScanStatus | null>(null);
 
   const groupedInventory = useMemo<Record<string, InventoryItem[]>>(() => {
     return inventory.reduce<Record<string, InventoryItem[]>>((acc, item) => {
@@ -116,8 +126,57 @@ export default function RegistrarVentaPage() {
     return { soldItems, salesCount: sales.length };
   }, [sales]);
 
+  const handleProductFromScan = useCallback(
+    (rawCode: string) => {
+      const normalized = normalizeBarcode(rawCode);
+      const product = findProductByCode(inventory, normalized);
+      if (!normalized) return;
+
+      if (!product) {
+        setLastScan({ code: normalized, status: 'missing', ts: Date.now() });
+        return;
+      }
+      if (product.stock <= 0) {
+        setLastScan({ code: normalized, status: 'noStock', product: product.name, ts: Date.now() });
+        return;
+      }
+
+      let appliedQty = 1;
+      setForm((prev) => {
+        const isSame = prev.productId === product.id;
+        const desiredQty = isSame ? prev.qty + 1 : 1;
+        const nextQty = Math.min(product.stock, desiredQty);
+        appliedQty = nextQty;
+        return {
+          ...prev,
+          productId: product.id,
+          qty: nextQty,
+          price: product.price ?? prev.price,
+          pickupBranch: product.branch ?? prev.pickupBranch,
+        };
+      });
+
+      setLastScan({
+        code: normalized,
+        status: 'found',
+        product: product.name,
+        qty: appliedQty,
+        ts: Date.now(),
+      });
+    },
+    [inventory, setForm]
+  );
+
+  useBarcodeScanner({ onScan: handleProductFromScan });
+
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleManualScan = () => {
+    if (!manualCode.trim()) return;
+    handleProductFromScan(manualCode);
+    setManualCode('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -322,6 +381,66 @@ export default function RegistrarVentaPage() {
                   ))}
                 </select>
               </label>
+            </div>
+            <div className="rounded-apple border border-dashed border-white/15 bg-white/5 p-4 space-y-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-white font-semibold flex items-center gap-2">
+                    <ScanLine size={15} className="text-apple-blue-300" />
+                    Lector de códigos de barra
+                  </p>
+                  <p className="apple-caption text-apple-gray-400">
+                    Escanea SKU / EAN y el sistema selecciona el producto y suma cantidad automáticamente.
+                  </p>
+                </div>
+                <span className="apple-caption text-apple-gray-500">Compatible con lectores USB / Bluetooth</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <input
+                  className="input-apple"
+                  placeholder="Escanea o ingresa manualmente el código"
+                  value={manualCode}
+                  onChange={(e) => setManualCode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleManualScan();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={handleManualScan}
+                  disabled={!manualCode.trim()}
+                >
+                  Añadir
+                </button>
+              </div>
+              {lastScan && (
+                <div
+                  className={`rounded-apple border px-3 py-2 text-sm flex items-center gap-2 ${
+                    lastScan.status === 'found'
+                      ? 'border-apple-green-500/40 bg-apple-green-500/10 text-apple-green-100'
+                      : lastScan.status === 'noStock'
+                      ? 'border-apple-orange-500/40 bg-apple-orange-500/10 text-apple-orange-100'
+                      : 'border-apple-red-500/40 bg-apple-red-500/10 text-apple-red-100'
+                  }`}
+                >
+                  <ScanLine size={14} />
+                  {lastScan.status === 'found' && (
+                    <span>
+                      {lastScan.product} detectado ({lastScan.code}). Cantidad actual: x{lastScan.qty}.
+                    </span>
+                  )}
+                  {lastScan.status === 'noStock' && (
+                    <span>{lastScan.product} está sin stock disponible ({lastScan.code}).</span>
+                  )}
+                  {lastScan.status === 'missing' && (
+                    <span>No encontramos coincidencias para {lastScan.code}. Revisa la configuración.</span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               <InputField

@@ -12,17 +12,16 @@ const THEME_INIT_SCRIPT = `(function() {
   try {
     var storageKey = '${THEME_STORAGE_KEY}';
     var legacyKey = '${LEGACY_THEME_STORAGE_KEY}';
-    var stored = localStorage.getItem(storageKey) || localStorage.getItem(legacyKey);
-    var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-    var theme = stored === 'light' || stored === 'dark' ? stored : (prefersLight ? 'light' : 'dark');
-    if (!localStorage.getItem(storageKey) && (stored === 'light' || stored === 'dark')) {
-      localStorage.setItem(storageKey, stored);
-    }
+    var theme = 'dark';
     var root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
     root.style.colorScheme = theme;
     root.setAttribute('data-theme', theme);
+    localStorage.setItem(storageKey, theme);
+    if (legacyKey) {
+      localStorage.removeItem(legacyKey);
+    }
   } catch (error) {
     console.warn('Theme init failed', error);
   }
