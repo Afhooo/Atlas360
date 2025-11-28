@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 // === Config desde .env ===
 const DEFAULT_DOMAIN = process.env.LOGIN_DOMAIN || 'fenix.local';
-const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'FENIX2025!';
+const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'ATLASDEMO2025';
 
 // --- helpers ---
 const toAscii = (s: string) =>

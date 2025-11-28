@@ -10,7 +10,7 @@ import { flattenLoginInput, normalizeLoginInput } from '@/lib/auth/login-normali
 import { supabaseAdmin as createSupabaseAdmin, SUPABASE_CONFIG } from '@/lib/supabase';
 
 const { jwtSecret: JWT_SECRET, sessionCookieName: COOKIE_NAME, sessionDays: COOKIE_DAYS } = authEnv;
-const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'FENIX2025!';
+const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'ATLASDEMO2025';
 const DEV_LOGIN_FALLBACK_ENABLED = process.env.DEV_LOGIN_FALLBACK !== 'false';
 const DEV_LOGIN_ALLOW_UNKNOWN = process.env.DEV_LOGIN_ALLOW_UNKNOWN !== 'false';
 

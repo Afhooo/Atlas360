@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
 
-const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'FENIX2025!';
+const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'ATLASDEMO2025';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'fenix_session';
 const COOKIE_DAYS = Number(process.env.SESSION_DAYS || '30');

@@ -10,7 +10,7 @@ const SRK = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !SRK) { console.error('Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE'); process.exit(1); }
 
 const LOGIN_DOMAIN     = process.env.LOGIN_DOMAIN || 'fenix.local';
-const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'FENIX2025!';
+const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'ATLASDEMO2025';
 const ONLY_ACTIVE      = (process.env.ONLY_ACTIVE ?? 'true').toLowerCase() !== 'false';
 const FILTER_ROLES     = (process.env.FILTER_ROLES || '').split(',').map(s=>s.trim()).filter(Boolean);
 const CONCURRENCY      = Number(process.env.CONCURRENCY || 10);

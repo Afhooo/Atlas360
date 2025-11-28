@@ -68,8 +68,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Atlas Suite" />
         
         {/* Favicon y iconos */}
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/22.svg" sizes="any" />
+        <link rel="icon" href="/22.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
       </head>

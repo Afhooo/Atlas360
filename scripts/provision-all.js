@@ -25,7 +25,7 @@ if (!SUPABASE_URL || !SERVICE_ROLE) {
 const DOMAIN           = process.env.LOGIN_DOMAIN || 'fenix.local';   // <local>@DOMAIN
 const ONLY_ACTIVE      = (process.env.ONLY_ACTIVE ?? 'true').toLowerCase() !== 'false';
 const MODE             = (process.env.MODE ?? 'uniform').toLowerCase(); // 'uniform' | 'random'
-const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'FENIX2025!';
+const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'ATLASDEMO2025';
 const OUT_CSV          = process.env.OUT_CSV || 'provisioned-users.csv';
 const SLEEP_MS         = Number(process.env.SLEEP_MS ?? 25);          // pequeño delay para no topar rate limit
 const CLEAR_PLAINTEXT  = (process.env.CLEAR_PLAINTEXT ?? 'false').toLowerCase() === 'true';
